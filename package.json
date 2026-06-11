@@ -1,0 +1,46 @@
+{
+  "name": "@jcibernet/visual-debug",
+  "version": "0.1.0",
+  "description": "One-shot headless Chromium snapshots with full devtools dump (screenshot + DOM + console + network + a11y + perf) for AI coding agents and CLI workflows.",
+  "type": "module",
+  "bin": {
+    "visual-debug": "./visual-debug.js"
+  },
+  "main": "./visual-debug.js",
+  "files": [
+    "visual-debug.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "smoke": "node visual-debug.js https://example.com --out /tmp/vd-smoke --name smoke --viewport 800x600"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  },
+  "keywords": [
+    "playwright",
+    "headless",
+    "chromium",
+    "screenshot",
+    "devtools",
+    "accessibility",
+    "performance",
+    "ai-agent",
+    "cli",
+    "visual-regression"
+  ],
+  "author": "Juan Cibernet (https://github.com/Jcibernet)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jcibernet/visual-debug.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Jcibernet/visual-debug/issues"
+  },
+  "homepage": "https://github.com/Jcibernet/visual-debug#readme",
+  "engines": {
+    "node": ">=18"
+  }
+}
