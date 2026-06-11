@@ -1,0 +1,22 @@
+{
+  "name": "checkout-example",
+  "baseUrl": "http://localhost:3000",
+  "viewport": "1440x900",
+  "continueOnError": false,
+  "finalSnapshot": true,
+  "steps": [
+    { "navigate": "/checkout" },
+    { "wait": "[data-step=address]" },
+    { "snapshot": "1-address-empty" },
+    { "fill": { "[name=email]": "demo@example.com", "[name=zip]": "1414" } },
+    { "snapshot": "2-address-filled" },
+    { "click": { "role": "button", "name": "Continue" } },
+    { "wait": "[data-step=payment]" },
+    { "fill": { "[name=card]": "4242424242424242" } },
+    { "snapshot": "3-payment-filled", "fullPage": true },
+    { "click": { "role": "button", "name": "Pay" } },
+    { "wait": "[data-step=success]", "timeout": 15000 },
+    { "snapshot": "4-success" },
+    { "eval": "() => document.querySelector('[data-order-id]')?.textContent || null" }
+  ]
+}

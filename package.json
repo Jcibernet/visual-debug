@@ -1,7 +1,7 @@
 {
   "name": "@jcibernet/visual-debug",
-  "version": "0.1.0",
-  "description": "One-shot headless Chromium snapshots with full devtools dump (screenshot + DOM + console + network + a11y + perf) for AI coding agents and CLI workflows.",
+  "version": "0.2.0",
+  "description": "Agent-first headless browser snapshots with full devtools dump, declarative multi-step flows, and run-vs-run diffs. Built for AI coding agents (Claude Code, Droid, Cursor) and CLI workflows.",
   "type": "module",
   "bin": {
     "visual-debug": "./visual-debug.js"
