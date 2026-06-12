@@ -1,36 +1,36 @@
 # visual-debug
 
-> Agent-first headless browser snapshots, multi-step flows, and run-vs-run diffs — designed for AI coding agents and CLI workflows.
+> Snapshots de navegador headless, flujos multi-step y diffs entre corridas — pensado para agentes de IA y workflows de CLI.
 
-`visual-debug` is a single-file CLI that lets an AI agent (Claude Code, Droid, Cursor, etc.) **see and operate** a running web app without needing a Playwright MCP server (and the ~3.5k context tokens it costs).
+`visual-debug` es un CLI de un solo archivo que permite a un agente de IA (Claude Code, Droid, Cursor, etc.) **ver y operar** una app web corriendo, sin necesidad de un servidor Playwright MCP (y los ~3.500 tokens de contexto que cuesta).
 
-Three modes in one binary:
+Tres modos en un mismo binario:
 
-1. **URL mode** — one-shot snapshot of any URL: screenshot + DOM + console + network + a11y + perf + page map.
-2. **Flow mode** — declarative multi-step recipes the agent can write inline (`--flow -`). Each step targets elements by **stable ref**, role, text, testId, or selector. Snapshots can be taken at any step.
-3. **Diff mode** — compare two manifests and get a verdict (`regression` / `changed` / `neutral`) with proper exit codes for CI loops.
+1. **Modo URL** — snapshot one-shot de cualquier URL: screenshot + DOM + console + network + a11y + perf + page map.
+2. **Modo Flow** — recetas declarativas multi-step que el agente puede escribir inline (`--flow -`). Cada paso apunta a elementos por **ref estable**, rol, texto, testId o selector. Los snapshots se pueden tomar en cualquier paso.
+3. **Modo Diff** — compara dos manifests y devuelve un veredicto (`regression` / `changed` / `neutral`) con exit codes propios para loops de CI.
 
-Designed around one principle: **give the agent everything it needs to navigate autonomously, with zero MCP overhead.**
-
----
-
-## Why?
-
-Browser MCP servers eat context. An agent loading Playwright MCP pays ~3,500 tokens of tool schema per session. For most loops — "look at the page", "click this thing", "compare before vs after" — that overhead is wasted.
-
-`visual-debug` solves the same problem in shell, with all state on disk:
-
-- Every snapshot writes a **page map** listing every interactable element with a stable `ref`. The agent can plan its next step without seeing the screen.
-- Flows are **JSON the agent can build inline** and pipe via stdin.
-- Diffs return **exit codes** so the agent (or CI) knows whether to keep iterating.
-
-It also doubles as a perfectly fine human tool for visual regression, perf triage, or quick a11y inspection.
+Diseñado alrededor de un principio: **darle al agente todo lo que necesita para navegar autónomamente, sin overhead de MCP.**
 
 ---
 
-## Install
+## ¿Por qué?
 
-Requires **Node 18+**.
+Los servidores MCP de navegador se comen el contexto. Un agente que carga Playwright MCP paga ~3.500 tokens de schema por sesión. Para la mayoría de los loops — "mirá la página", "clickeá esto", "comparar antes vs después" — ese overhead es desperdicio.
+
+`visual-debug` resuelve el mismo problema en shell, con todo el estado en disco:
+
+- Cada snapshot escribe un **page map** que lista todos los elementos interactuables con un `ref` estable. El agente puede planear su siguiente paso sin ver la pantalla.
+- Los flows son **JSON que el agente arma inline** y pipea por stdin.
+- Los diffs devuelven **exit codes** para que el agente (o CI) sepa si seguir iterando.
+
+También funciona perfectamente como herramienta para humanos: regresión visual, triage de perf, o inspección rápida de a11y.
+
+---
+
+## Instalación
+
+Requiere **Node 18+**.
 
 ```bash
 git clone https://github.com/Jcibernet/visual-debug.git
@@ -38,29 +38,29 @@ cd visual-debug
 npm install
 ```
 
-(Optional) make it globally callable:
+(Opcional) hacerlo invocable globalmente:
 
 ```bash
 npm link
-# or
+# o
 ln -s "$(pwd)/visual-debug.js" ~/.local/bin/visual-debug
 chmod +x visual-debug.js
 ```
 
-First run downloads Chromium via Playwright (~170MB). Already have a Playwright install? Point `--executable` or `VISUAL_DEBUG_CHROMIUM` at your existing binary.
+La primera corrida descarga Chromium vía Playwright (~170MB). Si ya tenés un Playwright instalado, apuntá `--executable` o `VISUAL_DEBUG_CHROMIUM` a tu binario existente.
 
 ---
 
 ## Quick start
 
 ```bash
-# URL mode (one-shot)
+# Modo URL (one-shot)
 visual-debug https://example.com
 
-# Flow mode (multi-step)
+# Modo Flow (multi-step)
 visual-debug --flow flows/checkout.json
 
-# Inline flow from stdin — what an AI agent typically does:
+# Flow inline desde stdin — lo que hace típicamente un agente de IA:
 echo '{
   "name": "smoke",
   "baseUrl": "http://localhost:3000",
@@ -74,17 +74,17 @@ echo '{
   ]
 }' | visual-debug --flow -
 
-# Diff two runs
+# Diff entre dos corridas
 visual-debug --diff before.manifest.json after.manifest.json
 ```
 
-Every run prints a manifest JSON to stdout. Use `--quiet` to print only that.
+Cada corrida imprime un manifest JSON a stdout. Usá `--quiet` para imprimir sólo el manifest.
 
 ---
 
-## The page map (key feature for agents)
+## El page map (feature clave para agentes)
 
-Each snapshot writes `<name>.map.json` with a structured inventory of the page. The manifest also embeds the first 50 interactables inline as `actions`, so the agent often doesn't need to open the map file at all.
+Cada snapshot escribe `<name>.map.json` con un inventario estructurado de la página. El manifest además embebe los primeros 50 interactuables inline como `actions`, así el agente muchas veces no necesita abrir el archivo de map.
 
 ```json
 {
@@ -98,19 +98,19 @@ Each snapshot writes `<name>.map.json` with a structured inventory of the page. 
 }
 ```
 
-The full `.map.json` adds:
+El `.map.json` completo además incluye:
 
-- `forms` — every form with fields, action, method.
+- `forms` — cada formulario con sus fields, action, method.
 - `landmarks` — `main`, `nav`, `header`, `footer`, etc.
-- `headings` — h1/h2/h3 with text.
+- `headings` — h1/h2/h3 con su texto.
 
-The agent reads the map, picks a `ref`, and acts.
+El agente lee el map, elige un `ref` y actúa.
 
 ---
 
 ## Flow recipes
 
-Flows are JSON. Steps support a sugared shorthand or a full form.
+Los flows son JSON. Cada step soporta una forma corta o la forma completa.
 
 ```json
 {
@@ -136,46 +136,46 @@ Flows are JSON. Steps support a sugared shorthand or a full form.
 }
 ```
 
-### Supported actions
+### Acciones soportadas
 
-| Action | Shape | Notes |
+| Acción | Forma | Notas |
 |---|---|---|
-| `navigate` | `{ "navigate": "/path" }` | Relative paths resolve against `baseUrl` |
-| `wait` | `{ "wait": "selector" }` or `{ "wait": 500 }` | Selector wait or ms |
-| `snapshot` | `{ "snapshot": "name", "fullPage": true }` | Full devtools dump + page map |
-| `click` | `{ "click": { "ref": 7 } }` | Or by `role`, `text`, `testId`, raw selector |
-| `fill` | `{ "fill": { "[name=x]": "value" } }` | Multi-field by selector map |
-| `type` | `{ "type": { "ref": 3, "value": "hi" } }` | Character-by-character |
-| `press` | `{ "press": "Enter" }` | Keyboard key |
+| `navigate` | `{ "navigate": "/path" }` | Las rutas relativas se resuelven contra `baseUrl` |
+| `wait` | `{ "wait": "selector" }` o `{ "wait": 500 }` | Espera por selector o por ms |
+| `snapshot` | `{ "snapshot": "name", "fullPage": true }` | Dump completo de devtools + page map |
+| `click` | `{ "click": { "ref": 7 } }` | O por `role`, `text`, `testId`, selector crudo |
+| `fill` | `{ "fill": { "[name=x]": "value" } }` | Multi-field por mapa selector→valor |
+| `type` | `{ "type": { "ref": 3, "value": "hi" } }` | Caracter por caracter |
+| `press` | `{ "press": "Enter" }` | Tecla del teclado |
 | `select` | `{ "select": { "ref": 5, "value": "ar" } }` | Dropdown |
 | `hover` | `{ "hover": { "ref": 7 } }` | |
-| `scroll` | `{ "scroll": "selector" }` or `{ "scroll": { "y": 800 } }` | |
-| `eval` | `{ "eval": "() => location.pathname" }` | Returns result in step entry |
+| `scroll` | `{ "scroll": "selector" }` o `{ "scroll": { "y": 800 } }` | |
+| `eval` | `{ "eval": "() => location.pathname" }` | Devuelve el resultado en la entrada del step |
 | `pause` | `{ "pause": 300 }` | ms |
 
-### Targeting (in order of agent preference)
+### Targeting (en orden de preferencia para el agente)
 
 ```jsonc
-{ "click": { "ref": 7 } }                                  // by page-map index
-{ "click": { "role": "button", "name": "Pay" } }           // by role + accessible name
-{ "click": { "text": "Continue", "exact": false } }        // by visible text
-{ "click": { "testId": "submit" } }                        // by data-testid
-{ "click": "[data-action=pay]" }                           // raw CSS selector
-{ "click": { "target": "[data-action=pay]", "button": "right" } } // full form
+{ "click": { "ref": 7 } }                                  // por índice del page map
+{ "click": { "role": "button", "name": "Pay" } }           // por rol + nombre accesible
+{ "click": { "text": "Continue", "exact": false } }        // por texto visible
+{ "click": { "testId": "submit" } }                        // por data-testid
+{ "click": "[data-action=pay]" }                           // selector CSS crudo
+{ "click": { "target": "[data-action=pay]", "button": "right" } } // forma completa
 ```
 
-`ref` is recomputed against the **current** page state at the moment of the step, so it stays valid even after dynamic DOM changes.
+`ref` se recalcula contra el estado **actual** de la página en el momento del step, así que sigue siendo válido incluso después de cambios dinámicos del DOM.
 
 ### Optional / continue-on-error
 
-- Step-level: `{ "click": "...", "optional": true }` — failure becomes `skipped`.
-- Flow-level: `"continueOnError": true` — every failing step becomes `skipped`.
+- A nivel de step: `{ "click": "...", "optional": true }` — si falla queda como `skipped`.
+- A nivel de flow: `"continueOnError": true` — todo step que falla queda como `skipped`.
 
-If a non-optional step fails and `continueOnError` is false, the flow stops, exits with code `1`, and the partial timeline is preserved.
+Si un step no-opcional falla y `continueOnError` es false, el flow para, sale con exit code `1`, y la timeline parcial queda persistida.
 
 ---
 
-## Diff mode
+## Modo Diff
 
 ```bash
 visual-debug --diff <baseline-manifest> <candidate-manifest> \
@@ -183,7 +183,7 @@ visual-debug --diff <baseline-manifest> <candidate-manifest> \
   [--fail-on console,network,perf,dom,screenshot,any]
 ```
 
-Writes `<name>.diff.json`:
+Escribe `<name>.diff.json`:
 
 ```json
 {
@@ -201,99 +201,99 @@ Writes `<name>.diff.json`:
 }
 ```
 
-**Exit code:** `1` if any of the categories in `--fail-on` are flagged, else `0`. Default `--fail-on console,network`. Use `--fail-on any` for strict mode.
+**Exit code:** `1` si alguna de las categorías en `--fail-on` está flaggeada, sino `0`. Default `--fail-on console,network`. Usá `--fail-on any` para modo estricto.
 
-This is the loop primitive for "did my change break something?".
+Este es el primitive del loop "¿mi cambio rompió algo?".
 
 ---
 
-## All options
+## Todas las opciones
 
 ```
-URL mode:
-  visual-debug <url> [options]
+Modo URL:
+  visual-debug <url> [opciones]
 
-Flow mode:
-  visual-debug --flow <file|->                  Read JSON flow from file or stdin
+Modo Flow:
+  visual-debug --flow <file|->                  Lee el flow JSON de archivo o stdin
 
-Diff mode:
-  visual-debug --diff <baseline> <candidate>    Compare two manifest JSONs
+Modo Diff:
+  visual-debug --diff <baseline> <candidate>    Compara dos manifests JSON
 
-Shared options:
-  --out <dir>            Output directory (default: ./.visual-debug)
-  --name <basename>      Basename for outputs (default: timestamp)
+Opciones compartidas:
+  --out <dir>            Directorio de salida (default: ./.visual-debug)
+  --name <basename>      Basename para los outputs (default: timestamp)
   --viewport <WxH>       Default 1440x900
-  --device <name>        Playwright device descriptor (e.g. "iPhone 14")
-  --wait <selector>      Wait for selector before first snapshot
-  --wait-ms <ms>         Extra wait after load (default 500)
-  --full-page            Full-page screenshots
-  --dark                 Dark colorScheme
+  --device <name>        Descriptor de device de Playwright (ej. "iPhone 14")
+  --wait <selector>      Espera por selector antes del primer snapshot
+  --wait-ms <ms>         Espera extra después del load (default 500)
+  --full-page            Screenshots full-page
+  --dark                 colorScheme oscuro
   --no-screenshot --no-dom --no-console --no-network --no-a11y --no-perf
-  --no-page-map          Skip interactable inventory
-  --script <path>        Run JS file inside page
+  --no-page-map          Saltea el inventario de interactuables
+  --script <path>        Corre un archivo JS dentro de la página
   --auth-storage <path>  storageState JSON
-  --user-agent <str>     Override UA
-  --executable <path>    Chromium binary
-  --slow                 250ms slowMo
-  --quiet                Only emit JSON
-  --fail-on <kinds>      Diff exit code categories (default: console,network)
+  --user-agent <str>     Override del UA
+  --executable <path>    Binario de Chromium
+  --slow                 250ms de slowMo
+  --quiet                Sólo emite JSON
+  --fail-on <kinds>      Categorías para exit code del diff (default: console,network)
 ```
 
 ---
 
-## Continuous-iteration loop for AI agents
+## Loop de iteración continua para agentes de IA
 
-The intended agent loop:
+El loop que está pensado para el agente:
 
 ```
-1. visual-debug <url> --name baseline       # snapshot current state + page map
-2. agent reads baseline.manifest.json       # picks ref or selector for next action
-3. agent constructs a flow JSON inline      # actions targeting refs/roles/text
-4. visual-debug --flow - --name attempt-1   # pipe via stdin, get new snapshots
+1. visual-debug <url> --name baseline       # snapshot del estado actual + page map
+2. el agente lee baseline.manifest.json     # elige ref o selector para la próxima acción
+3. el agente arma un flow JSON inline       # acciones apuntando a refs/roles/text
+4. visual-debug --flow - --name attempt-1   # pipea por stdin, obtiene nuevos snapshots
 5. visual-debug --diff baseline.manifest.json attempt-1-final.manifest.json
-6. read diff.verdict
-   - "neutral"     → no change; revise plan
-   - "changed"     → expected delta; proceed
-   - "regression"  → revert / iterate
+6. lee diff.verdict
+   - "neutral"     → no hubo cambio; revisa el plan
+   - "changed"     → delta esperado; continúa
+   - "regression"  → revertir / iterar
 7. goto 2
 ```
 
-Everything is on disk. The agent reads JSON via `cat`/`jq` — no extra context tokens spent.
+Todo en disco. El agente lee JSON con `cat`/`jq` — cero tokens extra de contexto.
 
 ---
 
-## Recipes
+## Recetas
 
-### One-shot inspection
+### Inspección one-shot
 
 ```bash
 visual-debug http://localhost:3000/checkout --full-page --wait "[data-step=payment]"
 ```
 
-### Auth + inspect
+### Auth + inspección
 
 ```bash
 visual-debug http://localhost:3000/dashboard --auth-storage ~/.auth/myapp.json
 ```
 
-### Visual regression in CI
+### Regresión visual en CI
 
 ```bash
 visual-debug http://staging/$URL --name baseline --quiet
 deploy_my_change
 visual-debug http://staging/$URL --name after --quiet
 visual-debug --diff baseline.manifest.json after.manifest.json --fail-on any
-# Job fails if anything regressed
+# El job falla si algo se regresó
 ```
 
-### Mobile + perf gate
+### Mobile + gate de perf
 
 ```bash
 visual-debug http://staging --device "iPhone 14" --no-screenshot --no-dom --no-a11y --quiet \
   | jq -e '.summary.perf.fcp < 2000'
 ```
 
-### Inline agent flow (typical Droid / Claude Code usage)
+### Flow inline de un agente (uso típico desde Droid / Claude Code)
 
 ```bash
 echo '{
@@ -312,42 +312,42 @@ echo '{
 
 ---
 
-## Comparison
+## Comparación
 
-|  | visual-debug | Playwright MCP | Puppeteer script | Lighthouse CLI |
+|  | visual-debug | Playwright MCP | Script de Puppeteer | Lighthouse CLI |
 |---|---|---|---|---|
-| Context tokens (agent session) | **0** | ~3,500 | 0 | 0 |
+| Tokens de contexto (sesión de agente) | **0** | ~3.500 | 0 | 0 |
 | Screenshot | ✅ | ✅ | ✅ | ✅ |
-| Console / network capture | ✅ | ✅ | manual | partial |
-| Accessibility tree | ✅ | ✅ | manual | scores only |
-| Perf metrics | ✅ | partial | manual | ✅ (richer) |
-| Page map / interactable inventory | ✅ | partial | ❌ | ❌ |
-| Declarative multi-step flows | ✅ | imperative | imperative | ❌ |
-| Run-vs-run diff with exit code | ✅ | ❌ | manual | ❌ |
-| Single file, zero config | ✅ | ❌ | ❌ | ✅ |
+| Captura de console / network | ✅ | ✅ | manual | parcial |
+| Árbol de accesibilidad | ✅ | ✅ | manual | sólo scores |
+| Métricas de perf | ✅ | parcial | manual | ✅ (más rico) |
+| Page map / inventario de interactuables | ✅ | parcial | ❌ | ❌ |
+| Flows declarativos multi-step | ✅ | imperativo | imperativo | ❌ |
+| Diff entre corridas con exit code | ✅ | ❌ | manual | ❌ |
+| Single file, cero config | ✅ | ❌ | ❌ | ✅ |
 
-**It's not a replacement for Playwright MCP** in deeply interactive flows. It **is** the cheaper, faster default for snapshot + navigate + diff loops.
-
----
-
-## How it works
-
-`visual-debug.js` is a single ESM file using Playwright's headless Chromium. It forces `QT_QPA_PLATFORM=xcb` to survive Wayland desktops with missing Qt plugins. Collectors register before navigation, each capture is wrapped in try/catch (one failing asset never breaks the run), and every step in a flow is timed and journaled into the flow manifest.
-
-Refs in the page map are derived from a fresh DOM walk at the moment of the step, so they don't get stale after re-renders.
+**No reemplaza a Playwright MCP** en flujos profundamente interactivos. **Sí es** el default más barato y rápido para loops de snapshot + navigate + diff.
 
 ---
 
-## Contributing
+## Cómo funciona
 
-PRs welcome. Constraints:
+`visual-debug.js` es un único archivo ESM usando Chromium headless de Playwright. Forza `QT_QPA_PLATFORM=xcb` para sobrevivir desktops Wayland con plugins Qt rotos. Los collectors se registran antes de la navegación, cada captura está envuelta en try/catch (un asset roto nunca rompe la corrida entera), y cada step de un flow se timea y se loguea en el manifest del flow.
 
-- Stay single-file (or add a `lib/` dir, but keep the entry minimal).
-- Keep the only runtime dep `playwright`.
-- Treat every agent-facing field as **stable API** once shipped — agents will read them.
+Los refs del page map se derivan de un walk fresco del DOM en el momento del step, así que no quedan stale después de re-renders.
 
 ---
 
-## License
+## Contribuir
+
+PRs bienvenidas. Restricciones:
+
+- Mantener un solo archivo (o agregar una carpeta `lib/`, pero que el entrypoint quede mínimo).
+- La única dep de runtime sigue siendo `playwright`.
+- Tratar cada campo expuesto al agente como **API estable** una vez shippeado — los agentes lo leen.
+
+---
+
+## Licencia
 
 MIT © Juan Cibernet

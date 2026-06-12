@@ -1,33 +1,34 @@
 # Changelog
 
-## v0.2.0 — Agent loops
+## v0.2.0 — Loops de agente
 
-### Added
-- **Flow mode** (`--flow <file|->`): declarative multi-step recipes the agent
-  can write inline and pipe via stdin. Supports `navigate`, `click`, `fill`,
-  `type`, `press`, `select`, `hover`, `scroll`, `eval`, `snapshot`, `wait`,
-  `pause`. Step results journaled into a flow manifest with status, ms, error.
-- **Page map** in every snapshot (`<name>.map.json` + embedded `actions` array
-  in the manifest): structured inventory of every interactable with a stable
-  `ref`, role, accessible name, value, bbox, and a robust CSS selector. Lets
-  an agent navigate without seeing the screen.
-- **Flexible targeting**: steps can target by `ref`, `role` + `name`, `text`,
-  `testId`, or raw CSS selector.
-- **Diff mode** (`--diff <baseline> <candidate>`): compares two manifests and
-  emits a verdict (`neutral` / `changed` / `regression`) with category flags
-  for screenshot, DOM, console, network, perf.
-- **Exit codes**: flow mode returns 1 on uncaught step failure; diff mode
-  returns 1 when any `--fail-on` category triggers (default
-  `console,network`).
-- **A11y fallback**: self-rolled DOM-based accessibility tree when Playwright
-  drops the native API.
+### Agregado
+- **Modo Flow** (`--flow <file|->`): recetas declarativas multi-step que el
+  agente puede escribir inline y pipear por stdin. Soporta `navigate`,
+  `click`, `fill`, `type`, `press`, `select`, `hover`, `scroll`, `eval`,
+  `snapshot`, `wait`, `pause`. Los resultados de cada step quedan loggeados
+  en el flow manifest con status, ms y error.
+- **Page map** en cada snapshot (`<name>.map.json` + array `actions`
+  embebido en el manifest): inventario estructurado de cada interactuable
+  con `ref` estable, rol, nombre accesible, value, bbox, y un selector CSS
+  robusto. Permite al agente navegar sin ver la pantalla.
+- **Targeting flexible**: los steps pueden apuntar por `ref`, `role` +
+  `name`, `text`, `testId`, o selector CSS crudo.
+- **Modo Diff** (`--diff <baseline> <candidate>`): compara dos manifests y
+  emite un veredicto (`neutral` / `changed` / `regression`) con flags por
+  categoría para screenshot, DOM, console, network, perf.
+- **Exit codes**: modo flow devuelve 1 al primer step uncaught que falle;
+  modo diff devuelve 1 cuando se dispara alguna categoría de `--fail-on`
+  (default `console,network`).
+- **Fallback de a11y**: árbol de accesibilidad basado en DOM construido a
+  mano para versiones de Playwright que removieron la API nativa.
 
-### Changed
-- `package.json` description and keywords updated for the new scope.
-- README rewritten around the agent loop.
+### Cambiado
+- `package.json` con descripción y keywords actualizados al nuevo scope.
+- README reescrito alrededor del loop de agente (en español).
 
-### Compat
-- URL mode is fully backwards-compatible with v0.1.
+### Compatibilidad
+- Modo URL es completamente backwards-compatible con v0.1.
 
 ## v0.1.0
-Initial release. URL mode only.
+Release inicial. Sólo modo URL.
