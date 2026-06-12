@@ -1,50 +1,77 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="260" viewBox="0 0 900 260" role="img" aria-label="visual-debug">
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="300" viewBox="0 0 900 300" role="img" aria-label="visual-debug">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#0b1020"/>
-      <stop offset="1" stop-color="#0a0e1a"/>
+      <stop offset="0" stop-color="#05030f"/>
+      <stop offset="0.5" stop-color="#0a0820"/>
+      <stop offset="1" stop-color="#05030f"/>
     </linearGradient>
-    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#7aa2ff"/>
-      <stop offset="0.5" stop-color="#4f7cff"/>
-      <stop offset="1" stop-color="#2d5bff"/>
+    <linearGradient id="neon" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#aee3ff"/>
+      <stop offset="0.5" stop-color="#3da9ff"/>
+      <stop offset="1" stop-color="#1f6bff"/>
     </linearGradient>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="3" stdDeviation="0" flood-color="#1b2a66" flood-opacity="1"/>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
     </filter>
+    <filter id="glowMag" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="2" fill="#000000" opacity="0.16"/>
+    </pattern>
+    <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+      <path d="M30 0H0V30" fill="none" stroke="#10204a" stroke-width="1" opacity="0.5"/>
+    </pattern>
   </defs>
 
-  <rect width="900" height="260" rx="16" fill="url(#bg)"/>
-  <rect x="1" y="1" width="898" height="258" rx="15" fill="none" stroke="#1c2747" stroke-width="2"/>
+  <!-- cabinet background -->
+  <rect width="900" height="300" rx="18" fill="url(#bg)"/>
+  <rect x="0" y="0" width="900" height="300" rx="18" fill="url(#grid)"/>
 
-  <!-- pixel grid accent (subtle dots) -->
-  <g fill="#16203c">
-    <rect x="40" y="40" width="6" height="6"/>
-    <rect x="60" y="40" width="6" height="6"/>
-    <rect x="820" y="210" width="6" height="6"/>
-    <rect x="840" y="210" width="6" height="6"/>
-    <rect x="40" y="210" width="6" height="6"/>
-    <rect x="840" y="40" width="6" height="6"/>
+  <!-- neon cabinet frame -->
+  <rect x="6" y="6" width="888" height="288" rx="14" fill="none" stroke="#1f6bff" stroke-width="3" opacity="0.9" filter="url(#glow)"/>
+  <rect x="14" y="14" width="872" height="272" rx="10" fill="none" stroke="#ff3df0" stroke-width="1.5" opacity="0.35"/>
+
+  <!-- top HUD bar -->
+  <text x="34" y="44" font-family="'Courier New', monospace" font-size="15" font-weight="700" letter-spacing="2" fill="#ff3df0" filter="url(#glowMag)">1UP</text>
+  <text x="34" y="64" font-family="'Courier New', monospace" font-size="13" font-weight="700" letter-spacing="2" fill="#aee3ff">000200</text>
+  <text x="866" y="44" text-anchor="end" font-family="'Courier New', monospace" font-size="15" font-weight="700" letter-spacing="2" fill="#ffd23d">HI-SCORE</text>
+  <text x="866" y="64" text-anchor="end" font-family="'Courier New', monospace" font-size="13" font-weight="700" letter-spacing="2" fill="#aee3ff">999999</text>
+
+  <!-- pixel hearts (lives) -->
+  <g fill="#ff3df0" filter="url(#glowMag)">
+    <g transform="translate(404,34)"><rect x="0" y="2" width="4" height="4"/><rect x="4" y="0" width="4" height="4"/><rect x="8" y="2" width="4" height="4"/><rect x="0" y="6" width="12" height="4"/><rect x="2" y="10" width="8" height="4"/><rect x="4" y="14" width="4" height="3"/></g>
+    <g transform="translate(424,34)"><rect x="0" y="2" width="4" height="4"/><rect x="4" y="0" width="4" height="4"/><rect x="8" y="2" width="4" height="4"/><rect x="0" y="6" width="12" height="4"/><rect x="2" y="10" width="8" height="4"/><rect x="4" y="14" width="4" height="3"/></g>
+    <g transform="translate(444,34)"><rect x="0" y="2" width="4" height="4"/><rect x="4" y="0" width="4" height="4"/><rect x="8" y="2" width="4" height="4"/><rect x="0" y="6" width="12" height="4"/><rect x="2" y="10" width="8" height="4"/><rect x="4" y="14" width="4" height="3"/></g>
   </g>
 
-  <!-- Title: pixel/block style via heavy monospace -->
-  <text x="50%" y="120" text-anchor="middle"
+  <!-- TITLE -->
+  <text x="450" y="158" text-anchor="middle"
         font-family="'Courier New', ui-monospace, monospace"
-        font-size="86" font-weight="700" letter-spacing="2"
-        fill="url(#blue)" filter="url(#shadow)">visual-debug</text>
+        font-size="74" font-weight="800" letter-spacing="2"
+        fill="url(#neon)" stroke="#0a1840" stroke-width="1.5" filter="url(#glow)">VISUAL-DEBUG</text>
 
-  <!-- divider -->
-  <rect x="220" y="158" width="460" height="3" rx="1.5" fill="#2d5bff" opacity="0.6"/>
+  <!-- subtitle plate -->
+  <rect x="250" y="184" width="400" height="30" rx="4" fill="#0c1840" stroke="#1f6bff" stroke-width="1.5" opacity="0.85"/>
+  <text x="450" y="205" text-anchor="middle"
+        font-family="'Courier New', monospace" font-size="17" font-weight="700" letter-spacing="4"
+        fill="#aee3ff">SNAPSHOTS &#183; FLOWS &#183; DIFFS</text>
 
-  <!-- subtitle -->
-  <text x="50%" y="196" text-anchor="middle"
-        font-family="ui-monospace, 'SF Mono', Menlo, monospace"
-        font-size="22" font-weight="500" letter-spacing="3"
-        fill="#9fb4e6">snapshots &#183; flows &#183; diffs</text>
+  <!-- PRESS START -->
+  <text x="450" y="244" text-anchor="middle"
+        font-family="'Courier New', monospace" font-size="15" font-weight="700" letter-spacing="5"
+        fill="#ffd23d" filter="url(#glowMag)">&#9654; PRESS START &#9664;</text>
 
   <!-- tagline -->
-  <text x="50%" y="226" text-anchor="middle"
-        font-family="ui-monospace, 'SF Mono', Menlo, monospace"
-        font-size="14" letter-spacing="1.5"
-        fill="#5b6b94">browser visibility para agentes de IA &#183; cero costo de contexto MCP</text>
+  <text x="450" y="270" text-anchor="middle"
+        font-family="'Courier New', monospace" font-size="12" letter-spacing="2"
+        fill="#5a6ea8">BROWSER VISIBILITY PARA AGENTES &#183; 0 TOKENS DE CONTEXTO MCP</text>
+
+  <!-- scanlines overlay -->
+  <rect width="900" height="300" rx="18" fill="url(#scan)"/>
 </svg>
