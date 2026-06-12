@@ -322,6 +322,36 @@ echo '{
 
 ---
 
+## Integración con Factory Droid (skill)
+
+El repo incluye una skill de Factory en `skills/visual-debug/SKILL.md` que le
+enseña al agente **cuándo y cómo** usar la herramienta solo — sin que tengas que
+explicárselo cada vez.
+
+Instalar:
+
+```bash
+mkdir -p ~/.factory/skills/visual-debug
+cp skills/visual-debug/SKILL.md ~/.factory/skills/visual-debug/
+```
+
+Una vez instalada, la skill se auto-activa cuando le pedís cosas como "mirá cómo
+se ve el dashboard", "hay errores en esta página", "comparemos antes vs después",
+o "arreglá el layout del hero". El agente:
+
+- Verifica que el dev server esté corriendo (y lo levanta si hace falta).
+- Toma el snapshot, lee el manifest, y abre el `.png` para evaluar lo visual.
+- Si estás iterando sobre la UI, corre el loop completo snapshot → editar →
+  snapshot → diff → veredicto.
+- Nunca pide habilitar un MCP para esto: todo corre por shell con cero contexto.
+
+Es el complemento natural de
+[factory-mcp-tools](https://github.com/Jcibernet/factory-mcp-tools): ahí
+mantenés Playwright MCP deshabilitado por default, y acá tenés la visibilidad de
+navegador igual, gratis.
+
+---
+
 ## Comparación
 
 |  | visual-debug | Playwright MCP | Script de Puppeteer | Lighthouse CLI |
