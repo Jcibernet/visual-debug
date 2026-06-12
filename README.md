@@ -1,13 +1,14 @@
-```
-   ██╗   ██╗██╗███████╗██╗   ██╗ █████╗ ██╗
-   ██║   ██║██║██╔════╝██║   ██║██╔══██╗██║      d e b u g
-   ██║   ██║██║███████╗██║   ██║███████║██║   ────────────────
-   ╚██╗ ██╔╝██║╚════██║██║   ██║██╔══██║██║    snapshots · flows
-    ╚████╔╝ ██║███████║╚██████╔╝██║  ██║███████╗   · diffs
-     ╚═══╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝  para agentes
-```
+<p align="center">
+  <img src=".github/banner.svg" alt="visual-debug" width="100%">
+</p>
 
-# visual-debug
+<p align="center">
+  <a href="https://github.com/Jcibernet/visual-debug/releases"><img src="https://img.shields.io/github/v/release/Jcibernet/visual-debug?style=flat-square&color=2d5bff&label=release" alt="release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2d5bff?style=flat-square" alt="license"></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D18-2d5bff?style=flat-square" alt="node">
+  <img src="https://img.shields.io/badge/MCP_context_cost-0_tokens-2d5bff?style=flat-square" alt="zero context">
+  <img src="https://img.shields.io/badge/agent--first-%E2%9C%93-2d5bff?style=flat-square" alt="agent first">
+</p>
 
 > Snapshots de navegador headless, flujos multi-step y diffs entre corridas — pensado para agentes de IA y workflows de CLI.
 
