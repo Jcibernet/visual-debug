@@ -150,6 +150,46 @@ screenshot, qué cambió el diff).
 - **Leé los PNG** con la tool Read para dar feedback visual real; no te quedes
   solo con el manifest JSON cuando la pregunta es sobre cómo se ve algo.
 
+## Gotcha: redirects del lado del cliente (geo / auth / i18n)
+
+Si la página hace un **redirect por JS** al cargar (geo-redirect por país,
+i18n `/` → `/es/`, guard de auth que manda a `/login`), el headless va a
+seguir el redirect y vas a capturar **otra página** distinta a la que pediste.
+Síntoma típico: pedís `/index.html` (EN) y el screenshot sale en español, o
+pedís una ruta privada y cae en el login.
+
+Cómo evitarlo (en orden de simplicidad):
+
+1. **Capturá una copia con otro nombre.** Si el redirect solo dispara en una
+   ruta puntual (ej. `/` o `/index.html`), copiá el archivo a un filename que
+   no matchee la condición, capturá, y borralo:
+   ```bash
+   cp index.html _preview.html
+   visual-debug http://localhost:8888/_preview.html --name en --full-page --quiet
+   rm -f _preview.html
+   ```
+2. **Seteá el estado que apaga el redirect ANTES de navegar**, vía un flow con
+   `eval` (cookie / localStorage), y recién después navegá a la ruta real:
+   ```bash
+   echo '{
+     "name": "en", "baseUrl": "http://localhost:8888",
+     "steps": [
+       { "navigate": "/es/" },
+       { "eval": "() => { document.cookie = \"pref_lang=en; path=/\"; }" },
+       { "navigate": "/index.html" },
+       { "wait": "#main" },
+       { "snapshot": "en" }
+     ]
+   }' | visual-debug --flow - --quiet
+   ```
+   (Ojo: si el redirect es síncrono y muy temprano, la opción 1 es más
+   confiable que pelear con la carrera del `eval`.)
+3. **Para auth**, preferí `--auth-storage <storageState.json>` (cookies +
+   localStorage de una sesión logueada) en vez de pasar por el login.
+
+Verificá siempre que capturaste lo correcto: `grep '<title>' .visual-debug/<name>.dom.html`
+o chequeá un texto único de la página esperada antes de leer el PNG.
+
 ## Output al usuario
 
 Sé concreto y con evidencia: "El hero quedó centrado (ver screenshot), el diff
