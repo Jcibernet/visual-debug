@@ -1,3 +1,12 @@
+```
+   ██╗   ██╗██╗███████╗██╗   ██╗ █████╗ ██╗
+   ██║   ██║██║██╔════╝██║   ██║██╔══██╗██║      d e b u g
+   ██║   ██║██║███████╗██║   ██║███████║██║   ────────────────
+   ╚██╗ ██╔╝██║╚════██║██║   ██║██╔══██║██║    snapshots · flows
+    ╚████╔╝ ██║███████║╚██████╔╝██║  ██║███████╗   · diffs
+     ╚═══╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝  para agentes
+```
+
 # visual-debug
 
 > Snapshots de navegador headless, flujos multi-step y diffs entre corridas — pensado para agentes de IA y workflows de CLI.
