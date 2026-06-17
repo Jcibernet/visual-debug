@@ -1,75 +1,91 @@
 ---
 name: visual-debug
 description: |
-  Dale al agente visibilidad del navegador y capacidad de navegar/iterar sobre
-  una app web, sin el costo de contexto de un MCP de Playwright. Usa esta skill
-  cuando el usuario quiera: ver/inspeccionar cómo se ve una página o componente,
-  tomar un screenshot, debuggear el frontend, revisar errores de consola o
-  requests de red, chequear accesibilidad o performance, hacer regresión visual
-  (comparar antes vs después de un cambio), o iterar sobre la UI con un loop de
-  mejora continua. Tambien aplica cuando el usuario menciona "mirá", "fijate",
-  "cómo se ve", "screenshot", "comparar UI", "se rompió el layout", "revisá el
-  front en localhost". Orquesta el CLI `visual-debug` (URL / flow / diff) que
-  corre via Execute con cero tokens de contexto.
+  El ojo crítico UI/UX del agente. Inspector de layout y accesibilidad sobre una
+  app web corriendo, sin el costo de contexto de un MCP de Playwright. Usá esta
+  skill cuando: estés por modificar código de UI/frontend, acabes de modificar UI
+  y quieras verificar que no rompiste el layout, debuguees un problema de
+  layout/accesibilidad reportado por el usuario, o estés revisando un PR que toca
+  archivos de frontend. También aplica cuando el usuario diga "mirá cómo se ve",
+  "fijate el front en localhost", "se rompió el layout", "revisá accesibilidad",
+  "comparemos antes vs después", "hay errores en esta página". Orquesta el CLI
+  `visual-debug` (URL / flow / diff / runs) que corre via Execute con cero tokens
+  de contexto. La salida principal es texto (layout SVG + uxReport), no píxeles.
 license: MIT
 metadata:
-  version: v1
+  version: v2
   publisher: jcibernet
 ---
 
-# visual-debug — browser visibility para el agente
+# visual-debug — el ojo crítico UI/UX del agente
 
-`visual-debug` es un CLI (no un MCP, no consume contexto) que le da al agente
-ojos sobre una app web corriendo. Tiene tres modos: **URL** (snapshot one-shot),
-**flow** (multi-step declarativo) y **diff** (regresión entre corridas).
+`visual-debug` es un CLI (no un MCP, no consume contexto) que te da ojos sobre una
+app web corriendo. v0.3.0 es **efímero por default** y su salida estrella es un
+**layout SVG** (vector) + un **uxReport** (heurísticas) — texto estructurado, no
+píxeles. Tres modos: **URL** (one-shot), **flow** (multi-step) y **diff**
+(regresión), más el subcomando **runs** (mantenimiento).
 
 Repo: https://github.com/Jcibernet/visual-debug
-Launcher: `~/.factory/bin/visual-debug` (o `visual-debug` si `~/.factory/bin`
-esta en el PATH).
+Launcher: `~/.factory/bin/visual-debug` (o `visual-debug` si está en el PATH).
+
+## Cuándo invocar (triggers)
+
+Disparate sola, sin que el usuario lo pida explícito, cuando:
+
+1. **Estás por modificar código de UI/frontend** → tomá un baseline efímero
+   primero, para entender la vista antes de tocarla.
+2. **Acabás de modificar UI** → snapshot + diff contra el baseline para verificar
+   que no rompiste el layout ni metiste findings de accesibilidad.
+3. **El usuario reporta un problema de layout/accesibilidad** → snapshot y leé el
+   `uxReport` y el layout SVG para localizarlo.
+4. **Estás revisando un PR que toca archivos de frontend** → snapshot de las
+   vistas afectadas y reportá con evidencia (qué dice el uxReport, qué cambió el
+   diff).
+
+## Invocación default: EFÍMERA
+
+Por default no escribís nada en el repo. La ruta del run temporal va a stderr;
+para parsear el manifest pedí `--emit-manifest` (va a stdout):
+
+```bash
+visual-debug http://localhost:3000/app --emit-manifest | jq '.summary, .uxReport | keys'
+```
+
+Leé, en este orden:
+1. **manifest** (`--emit-manifest` → stdout): `summary`, `actions`, `uxReport`.
+2. **layout SVG** (`outputs.layoutSvg`): leelo con Read. Es texto. Buscá
+   `data-issue=` para saltar a los elementos flaggeados (borde rojo punteado).
+3. **uxReport**: heurísticas de geometría y a11y, cada una con `severity`.
 
 ## Antes de empezar: chequeos rápidos
 
-1. **¿El binario está disponible?** Probá `visual-debug --help`. Si "command
-   not found", usá la ruta completa `~/.factory/bin/visual-debug`.
-2. **¿La app está corriendo?** visual-debug necesita una URL viva. Si el
-   usuario no la levantó:
-   - Detectá el dev server del proyecto (`package.json` → `dev`/`start`, o
-     `npm run dev`, `pnpm dev`, `next dev`, `vite`, etc.).
-   - Levantalo en background con Execute (fireAndForget) y esperá a que
-     responda antes de hacer el snapshot.
+1. **¿El binario está?** Probá `visual-debug --help`. Si "command not found", usá
+   `~/.factory/bin/visual-debug`.
+2. **¿La app está corriendo?** Necesitás una URL viva. Si no la levantaron,
+   detectá el dev server (`package.json` → `dev`/`start`; `next dev`, `vite`,
+   etc.), levantalo en background (Execute fireAndForget) y esperá a que responda.
 3. **¿Qué puerto?** Default suele ser 3000 (Next), 5173 (Vite), 8000 (FastAPI).
-   Confirmá con el output del dev server.
 
-## Modo URL — el 80% de los casos
+## Qué leer y qué IGNORAR (regla central)
 
-Para "mostrame cómo se ve X" o "hay algún error en esta página":
+- **LEÉ**: el manifest, el layout SVG y el uxReport. Te dan el layout y los
+  problemas en texto, a una fracción del costo en tokens.
+- **NO cargues el PNG/JPEG en contexto** salvo que vos hayas pedido
+  `--screenshot-on-issue` y se haya generado uno para un finding
+  `severity:'error'` puntual. Por default no se genera ningún raster.
+
+## Modo URL — inspección puntual
 
 ```bash
-visual-debug http://localhost:3000/app --full-page --quiet
+visual-debug http://localhost:3000/app --emit-manifest | jq '.uxReport.lowContrastPairs, .uxReport.tinyTapTargets'
 ```
 
-Después leé el manifest (chico) para decidir:
+Flags: `--viewport 375x812` o `--device "iPhone 14"` (mobile), `--dark`,
+`--wait "[selector]"`, `--auth-storage <storageState.json>` (login).
 
-```bash
-cat ./.visual-debug/<name>.manifest.json | jq '.summary, .actions'
-```
+## Modo flow — cuando hay que navegar/interactuar
 
-- `summary.console.errors > 0` → abrí `<name>.console.json` para ver el detalle.
-- `summary.network.failed > 0` → abrí `<name>.network.json`.
-- Para juzgar lo visual, **leé el `<name>.png`** con la tool Read (podés ver
-  imágenes). Ahí evaluás layout, jerarquía, color, spacing, etc.
-
-Flags útiles:
-- `--full-page` captura toda la página, no solo el viewport.
-- `--wait "[selector]"` espera a que aparezca un elemento antes de capturar.
-- `--device "iPhone 14"` o `--viewport 375x812` para mobile.
-- `--dark` para dark mode.
-- `--auth-storage <path>` si la página requiere login (storageState de Playwright).
-
-## Modo Flow — cuando hay que navegar/interactuar
-
-Cuando necesitás clickear, llenar formularios, o llegar a un estado puntual
-antes de capturar. Construí el flow JSON inline y pipealo por stdin:
+Armá el flow JSON inline y pipealo por stdin:
 
 ```bash
 echo '{
@@ -82,93 +98,83 @@ echo '{
     { "wait": "[data-step=detail]" },
     { "snapshot": "detalle" }
   ]
-}' | visual-debug --flow - --quiet
+}' | visual-debug --flow - --emit-manifest
 ```
 
-**Targeting de elementos** (en orden de preferencia):
-1. `{ "click": { "ref": 7 } }` — por índice del page map (lo más confiable).
-   Los refs salen del array `actions` del snapshot anterior.
-2. `{ "click": { "role": "button", "name": "Pay" } }` — semántico.
-3. `{ "click": { "text": "Continuar" } }` — por texto visible.
-4. `{ "click": { "testId": "submit" } }` — por data-testid.
-5. `{ "click": "[data-action=pay]" }` — selector CSS crudo (último recurso).
+Targeting (preferencia): `ref` → `role`+`name` → `text` → `testId` → selector CSS.
+Los `ref` salen del array `actions` del snapshot anterior. Acciones disponibles:
+`navigate`, `wait`, `snapshot`, `click`, `fill`, `type`, `press`, `select`,
+`hover`, `scroll`, `eval`, `pause`.
 
-Para descubrir los refs: hacé un snapshot primero, leé `actions` del manifest,
-y de ahí elegís a qué `ref` apuntar.
+## Modo diff — regresión / loop de mejora continua
 
-Acciones disponibles: `navigate`, `wait`, `snapshot`, `click`, `fill`, `type`,
-`press`, `select`, `hover`, `scroll`, `eval`, `pause`.
-
-## Modo Diff — regresión / loop de mejora continua
-
-Este es el primitive para "cambié algo, ¿mejoró o rompí?". Compara dos
-manifests y devuelve un veredicto con exit code:
+El primitive para "cambié algo, ¿mejoré o rompí?". Pipeable:
 
 ```bash
-visual-debug --diff baseline.manifest.json after.manifest.json --fail-on console,network
+# 1. baseline ANTES de tocar nada
+visual-debug http://localhost:3000/app --emit-manifest > /tmp/baseline.json
+# 2. EDITÁS EL CÓDIGO, esperás rebuild/HMR
+# 3. comparás
+visual-debug http://localhost:3000/app --emit-manifest \
+  | visual-debug --diff-against /tmp/baseline.json - --fail-on layout,ux
 echo "exit=$?"
 ```
 
-- `verdict: neutral` → no hubo cambio relevante.
-- `verdict: changed` → hubo delta (DOM/perf/screenshot) pero sin errores nuevos.
-- `verdict: regression` → aparecieron errores de consola o requests fallidos.
-- Exit code `1` si dispara alguna categoría de `--fail-on` (default
-  `console,network`). Usá `--fail-on any` para modo estricto.
+- `verdict: neutral` → sin cambio. `changed` → delta esperado. `regression` →
+  errores de consola/red o findings UX nuevos.
+- Categorías de `--fail-on`: `console`, `network`, `perf`, `dom`, `screenshot`,
+  `layout`, `ux`, `any`. Exit `1` si dispara alguna.
 
-## El loop de mejora continua (el caso más potente)
+## Cuándo persistir (y cuándo NO)
 
-Cuando el usuario pide iterar sobre la UI ("arreglá el hero", "alineá esto",
-"que el panel ocupe todo el ancho"):
+Persistí SOLO en estos casos, con `--persist-as <nombre>`:
 
-```
-1. visual-debug <url> --name baseline --full-page   # estado actual
-2. leé baseline.png + baseline.manifest.json        # entendé qué hay que cambiar
-3. EDITÁ EL CÓDIGO                                   # tu cambio
-4. (esperá rebuild/HMR del dev server)
-5. visual-debug <url> --name after --full-page       # nuevo estado
-6. visual-debug --diff baseline.manifest.json after.manifest.json
-7. leé after.png + el verdict
-   - mejoró y sin regresión → listo (o seguí iterando si falta)
-   - regresión → revertí o ajustá
-8. goto 3
+- **Baseline para un refactor grande**: querés comparar al final de varias
+  iteraciones.
+- **Capturar un estado roto reproducible** para un bug report (sumá
+  `--screenshot-on-issue` para tener la evidencia visual solo cuando hay error).
+
+```bash
+visual-debug http://localhost:3000/settings --persist-as settings-baseline
 ```
 
-Todo queda en `./.visual-debug/`. Leé los `.png` con Read para evaluar lo
-visual vos mismo. Reportá al usuario con evidencia concreta (qué viste en el
-screenshot, qué cambió el diff).
+Mantenimiento de lo persistido:
+
+```bash
+visual-debug runs --list                      # estado fresh/stale/unknown
+visual-debug runs --prune-stale --yes         # borra lo que ya no matchea el DOM
+visual-debug runs --clean --yes               # borra todo
+```
+
+## Anti-patrones (NO hagas esto)
+
+- **No uses `--persist` "por las dudas".** El default es efímero por algo. Si no
+  vas a comparar contra ese run más tarde, no lo guardes.
+- **No leas el PNG/JPEG** salvo que `--screenshot-on-issue` te haya generado uno
+  para un error concreto. Para juzgar layout, leé el `.layout.svg`.
+- **No corras en cada save de archivo.** Snapshot cuando tenés algo que verificar
+  (antes/después de un cambio), no en loop ciego.
+- **No asumas el puerto ni que la app está viva** — verificá primero.
 
 ## Reglas de uso
 
-- **Cero costo de contexto**: visual-debug corre por Execute. No pidas habilitar
-  ningún MCP para esto.
-- **Preferí visual-debug antes que el MCP de Playwright** para snapshots,
-  navegación por flow, regresión y triage. Solo sugerí el MCP de Playwright si
-  necesitás una sesión interactiva viva paso a paso dentro del mismo turno.
-- **Limpiá si generás mucho**: `./.visual-debug/` puede crecer. Si el proyecto
-  no lo ignora, agregá `.visual-debug/` al `.gitignore` (no lo commitees).
-- **No asumas el puerto ni que la app está corriendo** — verificá primero.
-- **Leé los PNG** con la tool Read para dar feedback visual real; no te quedes
-  solo con el manifest JSON cuando la pregunta es sobre cómo se ve algo.
+- **Cero costo de contexto**: corre por Execute. No pidas habilitar ningún MCP.
+- **Preferí visual-debug antes que el MCP de Playwright** para inspección,
+  navegación por flow, regresión y auditoría UX. Solo sugerí el MCP de Playwright
+  si necesitás una sesión interactiva viva paso a paso dentro del mismo turno.
+- Si persistís, `.visual-debug/` ya debería estar en `.gitignore` (no lo
+  commitees).
 
 ## Gotcha: redirects del lado del cliente (geo / auth / i18n)
 
-Si la página hace un **redirect por JS** al cargar (geo-redirect por país,
-i18n `/` → `/es/`, guard de auth que manda a `/login`), el headless va a
-seguir el redirect y vas a capturar **otra página** distinta a la que pediste.
-Síntoma típico: pedís `/index.html` (EN) y el screenshot sale en español, o
-pedís una ruta privada y cae en el login.
+Si la página hace un **redirect por JS** al cargar (geo por país, i18n `/` →
+`/es/`, guard de auth → `/login`), el headless sigue el redirect y capturás otra
+página. Verificá siempre que capturaste lo correcto: chequeá `finalUrl` en el
+manifest, o un texto único de la página esperada.
 
-Cómo evitarlo (en orden de simplicidad):
+Cómo evitarlo:
 
-1. **Capturá una copia con otro nombre.** Si el redirect solo dispara en una
-   ruta puntual (ej. `/` o `/index.html`), copiá el archivo a un filename que
-   no matchee la condición, capturá, y borralo:
-   ```bash
-   cp index.html _preview.html
-   visual-debug http://localhost:8888/_preview.html --name en --full-page --quiet
-   rm -f _preview.html
-   ```
-2. **Seteá el estado que apaga el redirect ANTES de navegar**, vía un flow con
+1. **Seteá el estado que apaga el redirect ANTES de navegar**, vía un flow con
    `eval` (cookie / localStorage), y recién después navegá a la ruta real:
    ```bash
    echo '{
@@ -180,18 +186,14 @@ Cómo evitarlo (en orden de simplicidad):
        { "wait": "#main" },
        { "snapshot": "en" }
      ]
-   }' | visual-debug --flow - --quiet
+   }' | visual-debug --flow - --emit-manifest
    ```
-   (Ojo: si el redirect es síncrono y muy temprano, la opción 1 es más
-   confiable que pelear con la carrera del `eval`.)
-3. **Para auth**, preferí `--auth-storage <storageState.json>` (cookies +
-   localStorage de una sesión logueada) en vez de pasar por el login.
-
-Verificá siempre que capturaste lo correcto: `grep '<title>' .visual-debug/<name>.dom.html`
-o chequeá un texto único de la página esperada antes de leer el PNG.
+2. **Para auth**, preferí `--auth-storage <storageState.json>` en vez de pasar
+   por el login.
 
 ## Output al usuario
 
-Sé concreto y con evidencia: "El hero quedó centrado (ver screenshot), el diff
-no muestra regresión (verdict=neutral, 0 errores de consola nuevos)." Evitá
-describir el proceso; mostrá el resultado.
+Sé concreto y con evidencia del uxReport y el diff: "El form tiene 2 inputs sin
+label (uxReport.unlabeledInputs) y un botón con nombre accesible vacío. El diff
+no muestra regresión de layout (verdict=neutral)." Mostrá el resultado, no el
+proceso.

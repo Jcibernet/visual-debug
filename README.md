@@ -7,34 +7,81 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-MIT-1f6bff?style=for-the-badge&labelColor=05030f" alt="license"></a>
   <img src="https://img.shields.io/badge/NODE-%3E%3D18-1f6bff?style=for-the-badge&labelColor=05030f" alt="node">
   <img src="https://img.shields.io/badge/MCP_COST-0_TOKENS-ffd23d?style=for-the-badge&labelColor=05030f" alt="zero context">
-  <img src="https://img.shields.io/badge/AGENT-FIRST-ff3df0?style=for-the-badge&labelColor=05030f" alt="agent first">
+  <img src="https://img.shields.io/badge/OUTPUT-VECTOR_NOT_PIXELS-ff3df0?style=for-the-badge&labelColor=05030f" alt="vector">
 </p>
 
-> Snapshots de navegador headless, flujos multi-step y diffs entre corridas — pensado para agentes de IA y workflows de CLI.
+# visual-debug
 
-`visual-debug` es un CLI de un solo archivo que permite a un agente de IA (Claude Code, Droid, Cursor, etc.) **ver y operar** una app web corriendo, sin necesidad de un servidor Playwright MCP (y los ~3.500 tokens de contexto que cuesta).
+> El ojo crítico UI/UX para agentes de código. Inspecciona, mide, compara — sin acumular basura en el repo.
 
-Tres modos en un mismo binario:
+Este README está escrito para vos, agente (Claude Code, Droid, Cursor). Es la
+documentación que leés cuando encontrás `visual-debug` dentro de un proyecto.
+Instrucciones directas, sin vueltas.
 
-1. **Modo URL** — snapshot one-shot de cualquier URL: screenshot + DOM + console + network + a11y + perf + page map.
-2. **Modo Flow** — recetas declarativas multi-step que el agente puede escribir inline (`--flow -`). Cada paso apunta a elementos por **ref estable**, rol, texto, testId o selector. Los snapshots se pueden tomar en cualquier paso.
-3. **Modo Diff** — compara dos manifests y devuelve un veredicto (`regression` / `changed` / `neutral`) con exit codes propios para loops de CI.
+`visual-debug` es un CLI de un solo archivo que te deja **ver y operar** una app
+web corriendo, sin un servidor Playwright MCP (y los ~3.500 tokens de contexto
+que cuesta). Corre por shell, todo el estado queda en disco, y vos leés JSON +
+SVG con `cat`/`jq`.
 
-Diseñado alrededor de un principio: **darle al agente todo lo que necesita para navegar autónomamente, sin overhead de MCP.**
+La salida estrella **no es un screenshot**. Es un **layout SVG** (vector) + un
+**uxReport** (heurísticas de geometría y accesibilidad). Leés texto estructurado,
+no píxeles. Los PNG/JPEG son opt-in.
 
 ---
 
-## ¿Por qué?
+## Novedades v0.3.0
 
-Los servidores MCP de navegador se comen el contexto. Un agente que carga Playwright MCP paga ~3.500 tokens de schema por sesión. Para la mayoría de los loops — "mirá la página", "clickeá esto", "comparar antes vs después" — ese overhead es desperdicio.
+Si ya conocés v0.2.0, lo que cambió:
 
-`visual-debug` resuelve el mismo problema en shell, con todo el estado en disco:
+- **Efímero por default.** Una corrida vive en un tmp dir y se borra al salir.
+  Ya **no** se escribe `.visual-debug/` en el repo salvo que lo pidas. La ruta
+  del run temporal se imprime en **stderr**.
+- **Los PNG ya no se generan por default.** Para juzgar UI leé el `.layout.svg`
+  y el `uxReport` — son texto y cuestan una fracción de tokens. Pedí raster solo
+  con `--screenshots` o `--screenshot-on-issue`.
+- **Persistir es opt-in y semántico**: `--persist-as <nombre>`, no acumulación
+  por timestamp.
+- **Pipeable**: `--emit-manifest` manda el manifest a stdout; `--diff-against`
+  acepta `-` (stdin).
+- El JSON viejo no cambió. Solo se agregaron campos (`layout`, `uxReport`,
+  `layoutSvg`) y categorías de diff (`layout`, `ux`). Todo es back-compat.
 
-- Cada snapshot escribe un **page map** que lista todos los elementos interactuables con un `ref` estable. El agente puede planear su siguiente paso sin ver la pantalla.
-- Los flows son **JSON que el agente arma inline** y pipea por stdin.
-- Los diffs devuelven **exit codes** para que el agente (o CI) sepa si seguir iterando.
+---
 
-También funciona perfectamente como herramienta para humanos: regresión visual, triage de perf, o inspección rápida de a11y.
+## Qué hace
+
+Tres modos + un subcomando de mantenimiento:
+
+1. **URL** — `visual-debug <url>`: snapshot one-shot. Page map + layout SVG +
+   uxReport (+ devtools dump: console, network, a11y, perf).
+2. **Flow** — `visual-debug --flow -`: recetas multi-paso que armás inline y
+   pipeás por stdin. Clickeás, llenás forms, navegás, y snapshoteás en cualquier
+   paso.
+3. **Diff** — `visual-debug --diff a b`: compara dos manifests y devuelve un
+   veredicto (`regression`/`changed`/`neutral`) con exit codes para tu loop.
+4. **Runs** — `visual-debug runs ...`: mantenimiento destructivo de runs
+   persistidos (listar, prunear, limpiar). Vive aparte para no dispararse solo.
+
+---
+
+## Cuándo usarlo (decision tree)
+
+```
+¿Solo querés inspeccionar una vista?
+  → URL mode:  visual-debug <url>
+
+¿Tenés que navegar/interactuar antes de ver el estado (login, form, tab)?
+  → Flow mode: armá el JSON inline y pipealo por stdin con --flow -
+
+¿Estás iterando sobre un cambio y querés saber si rompiste algo?
+  → snapshot baseline (--emit-manifest > base.json)
+    → editás el código
+    → snapshot nuevo | --diff-against base.json -
+    → leés el verdict
+
+¿Vas a hacer un refactor grande y querés un baseline nombrado?
+  → --persist-as <nombre>  (único caso donde conviene persistir)
+```
 
 ---
 
@@ -43,338 +90,352 @@ También funciona perfectamente como herramienta para humanos: regresión visual
 Requiere **Node 18+**.
 
 ```bash
-git clone https://github.com/Jcibernet/visual-debug.git
-cd visual-debug
-npm install
+npm i -g @jcibernet/visual-debug
 ```
 
-(Opcional) hacerlo invocable globalmente:
+La primera corrida descarga Chromium vía Playwright (~170MB). Si ya tenés uno,
+apuntá `--executable <path>` o la env var `VISUAL_DEBUG_CHROMIUM` a tu binario.
+
+**Primer comando, copy-paste, funciona sin setup previo:**
 
 ```bash
-npm link
-# o
-ln -s "$(pwd)/visual-debug.js" ~/.local/bin/visual-debug
-chmod +x visual-debug.js
+visual-debug https://example.com --emit-manifest | jq '.summary, .actions[0:3]'
 ```
 
-La primera corrida descarga Chromium vía Playwright (~170MB). Si ya tenés un Playwright instalado, apuntá `--executable` o `VISUAL_DEBUG_CHROMIUM` a tu binario existente.
+Eso corre efímero (no escribe nada en el repo), te da el manifest por stdout, y
+con `jq` ves el resumen y los primeros interactuables. El tmp dir se borra solo.
 
 ---
 
-## Quick start
+## Modo URL — inspección puntual
 
 ```bash
-# Modo URL (one-shot)
-visual-debug https://example.com
+# Efímero (default). La ruta del tmp dir va a stderr.
+visual-debug http://localhost:3000/app
 
-# Modo Flow (multi-step)
-visual-debug --flow flows/checkout.json
+# Manifest a stdout para parsear con jq (resumen va a stderr):
+visual-debug http://localhost:3000/app --emit-manifest | jq '.uxReport | keys'
+```
 
-# Flow inline desde stdin — lo que hace típicamente un agente de IA:
+Flags útiles:
+
+```bash
+--viewport 375x812      # o --device "iPhone 14" para mobile
+--dark                  # dark colorScheme
+--wait "[selector]"     # esperá a que aparezca algo antes de capturar
+--auth-storage <path>   # storageState de Playwright (sesión logueada)
+--full-page             # solo afecta el raster (si lo activás)
+```
+
+---
+
+## Modo flow — recetas multi-paso vía stdin
+
+Cuando hay que clickear, llenar forms o llegar a un estado antes de snapshotear.
+Armá el JSON inline y pipealo:
+
+```bash
 echo '{
-  "name": "smoke",
+  "name": "verify",
   "baseUrl": "http://localhost:3000",
   "steps": [
-    { "navigate": "/" },
-    { "snapshot": "home" },
-    { "click": { "text": "Sign in" } },
-    { "wait": "[data-step=login]" },
-    { "fill": { "[name=email]": "x@y.com" } },
-    { "snapshot": "login-filled" }
-  ]
-}' | visual-debug --flow -
-
-# Diff entre dos corridas
-visual-debug --diff before.manifest.json after.manifest.json
-```
-
-Cada corrida imprime un manifest JSON a stdout. Usá `--quiet` para imprimir sólo el manifest.
-
----
-
-## El page map (feature clave para agentes)
-
-Cada snapshot escribe `<name>.map.json` con un inventario estructurado de la página. El manifest además embebe los primeros 50 interactuables inline como `actions`, así el agente muchas veces no necesita abrir el archivo de map.
-
-```json
-{
-  "actions": [
-    { "ref": 1, "role": "link",         "name": "Home",            "selector": "[data-testid=\"nav-home\"]" },
-    { "ref": 2, "role": "button",       "name": "Sign in",         "selector": "button[aria-label=\"Sign in\"]" },
-    { "ref": 3, "role": "input:email",  "name": "Email",           "selector": "[name=\"email\"]" },
-    { "ref": 4, "role": "input:password","name": "Password",       "selector": "[name=\"password\"]" },
-    { "ref": 5, "role": "button",       "name": "Continue",        "selector": "[data-action=\"submit\"]" }
-  ]
-}
-```
-
-El `.map.json` completo además incluye:
-
-- `forms` — cada formulario con sus fields, action, method.
-- `landmarks` — `main`, `nav`, `header`, `footer`, etc.
-- `headings` — h1/h2/h3 con su texto.
-
-El agente lee el map, elige un `ref` y actúa.
-
----
-
-## Flow recipes
-
-Los flows son JSON. Cada step soporta una forma corta o la forma completa.
-
-```json
-{
-  "name": "checkout",
-  "baseUrl": "http://localhost:3000",
-  "viewport": "1440x900",
-  "continueOnError": false,
-  "finalSnapshot": true,
-  "steps": [
-    { "navigate": "/checkout" },
-    { "wait": "[data-step=address]" },
-    { "snapshot": "address-form" },
-    { "fill": { "[name=email]": "x@y.com", "[name=zip]": "1414" } },
+    { "navigate": "/app" },
+    { "snapshot": "inicial" },
     { "click": { "ref": 7 } },
-    { "wait": "[data-step=payment]" },
-    { "fill": { "[name=card]": "4242 4242 4242 4242" } },
-    { "snapshot": "payment-filled", "fullPage": true },
-    { "click": { "role": "button", "name": "Pay" } },
-    { "wait": "[data-step=success]" },
-    { "snapshot": "success" },
-    { "eval": "() => document.querySelector('[data-order-id]')?.textContent" }
+    { "wait": "[data-step=detail]" },
+    { "snapshot": "detalle" }
   ]
-}
+}' | visual-debug --flow - --emit-manifest
 ```
 
-### Acciones soportadas
-
-| Acción | Forma | Notas |
-|---|---|---|
-| `navigate` | `{ "navigate": "/path" }` | Las rutas relativas se resuelven contra `baseUrl` |
-| `wait` | `{ "wait": "selector" }` o `{ "wait": 500 }` | Espera por selector o por ms |
-| `snapshot` | `{ "snapshot": "name", "fullPage": true }` | Dump completo de devtools + page map |
-| `click` | `{ "click": { "ref": 7 } }` | O por `role`, `text`, `testId`, selector crudo |
-| `fill` | `{ "fill": { "[name=x]": "value" } }` | Multi-field por mapa selector→valor |
-| `type` | `{ "type": { "ref": 3, "value": "hi" } }` | Caracter por caracter |
-| `press` | `{ "press": "Enter" }` | Tecla del teclado |
-| `select` | `{ "select": { "ref": 5, "value": "ar" } }` | Dropdown |
-| `hover` | `{ "hover": { "ref": 7 } }` | |
-| `scroll` | `{ "scroll": "selector" }` o `{ "scroll": { "y": 800 } }` | |
-| `eval` | `{ "eval": "() => location.pathname" }` | Devuelve el resultado en la entrada del step |
-| `pause` | `{ "pause": 300 }` | ms |
-
-### Targeting (en orden de preferencia para el agente)
+**Targeting** (en orden de preferencia):
 
 ```jsonc
-{ "click": { "ref": 7 } }                                  // por índice del page map
-{ "click": { "role": "button", "name": "Pay" } }           // por rol + nombre accesible
-{ "click": { "text": "Continue", "exact": false } }        // por texto visible
-{ "click": { "testId": "submit" } }                        // por data-testid
-{ "click": "[data-action=pay]" }                           // selector CSS crudo
-{ "click": { "target": "[data-action=pay]", "button": "right" } } // forma completa
+{ "click": { "ref": 7 } }                          // por índice del page map
+{ "click": { "role": "button", "name": "Pay" } }   // por rol + nombre accesible
+{ "click": { "text": "Continuar" } }               // por texto visible
+{ "click": { "testId": "submit" } }                // por data-testid
+{ "click": "[data-action=pay]" }                   // selector CSS crudo
 ```
 
-`ref` se recalcula contra el estado **actual** de la página en el momento del step, así que sigue siendo válido incluso después de cambios dinámicos del DOM.
+Los `ref` salen del array `actions` del snapshot anterior. Se recalculan contra
+el DOM **actual** en cada step, así que no quedan stale tras re-renders.
 
-### Optional / continue-on-error
+Acciones: `navigate`, `wait`, `snapshot`, `click`, `fill`, `type`, `press`,
+`select`, `hover`, `scroll`, `eval`, `pause`. Por step: `optional: true`; por
+flow: `continueOnError: true`.
 
-- A nivel de step: `{ "click": "...", "optional": true }` — si falla queda como `skipped`.
-- A nivel de flow: `"continueOnError": true` — todo step que falla queda como `skipped`.
-
-Si un step no-opcional falla y `continueOnError` es false, el flow para, sale con exit code `1`, y la timeline parcial queda persistida.
+Para activar raster solo en un snapshot puntual: `{ "snapshot": "x", "screenshot": true }`.
 
 ---
 
-## Modo Diff
+## Modo diff — verificar que un cambio no rompió nada
 
 ```bash
-visual-debug --diff <baseline-manifest> <candidate-manifest> \
-  [--out ./.visual-debug] [--name <basename>] \
-  [--fail-on console,network,perf,dom,screenshot,any]
+# Forma clásica (dos archivos):
+visual-debug --diff baseline.json after.json --fail-on console,network,layout,ux
+
+# Forma pipeable (el candidate viene del stdin):
+visual-debug http://localhost:3000/app --emit-manifest \
+  | visual-debug --diff-against baseline.json - --fail-on layout,ux
+echo "exit=$?"
 ```
 
-Escribe `<name>.diff.json`:
-
-```json
-{
-  "type": "diff",
-  "baseline": "before",
-  "candidate": "after",
-  "flags": { "screenshot": false, "dom": true, "console": true, "network": false, "perf": false, "any": true },
-  "screenshot": { "baselineBytes": 80123, "candidateBytes": 79988, "sizeDeltaPct": 0.17 },
-  "dom":        { "added": 3, "removed": 1, "mutated": 12 },
-  "console":    { "newErrors": ["TypeError: cannot read x of undefined"], "fixed": [] },
-  "network":    { "newFailures": [], "totalDelta": 0 },
-  "perf":       { "fcpDelta": 18, "loadDelta": -42 },
-  "verdict": "regression",
-  "summaryLine": "verdict=regression | +1 console errors | dom +3/-1"
-}
-```
-
-**Exit code:** `1` si alguna de las categorías en `--fail-on` está flaggeada, sino `0`. Default `--fail-on console,network`. Usá `--fail-on any` para modo estricto.
-
-Este es el primitive del loop "¿mi cambio rompió algo?".
+- `verdict: neutral` → sin cambio relevante.
+- `verdict: changed` → hubo delta (layout/dom/perf/screenshot) sin errores ni
+  findings UX nuevos.
+- `verdict: regression` → aparecieron errores de consola, requests fallidos, o
+  findings UX nuevos.
+- **Exit code `1`** si dispara alguna categoría de `--fail-on`. Categorías
+  válidas: `console`, `network`, `perf`, `dom`, `screenshot`, `layout`, `ux`,
+  `any`. Default: `console,network`. Usá `any` para modo estricto.
 
 ---
 
-## Todas las opciones
+## Outputs: qué leer y qué ignorar
 
+> **REGLA CENTRAL: leé el manifest, el layout SVG y el uxReport. NO cargues el
+> PNG/JPEG en contexto** salvo que `--screenshot-on-issue` te haya generado uno
+> para un finding `severity:'error'` puntual. El SVG + uxReport te dan el layout
+> y los problemas en texto, a una fracción del costo en tokens de una imagen.
+
+### Manifest
+
+El índice de todo. Empezá por acá. Trae embebido lo que necesitás para decidir
+el próximo paso sin abrir otros archivos:
+
+```bash
+visual-debug <url> --emit-manifest | jq '.summary, .actions, .uxReport.tinyTapTargets'
 ```
-Modo URL:
-  visual-debug <url> [opciones]
 
-Modo Flow:
-  visual-debug --flow <file|->                  Lee el flow JSON de archivo o stdin
+- `summary` — conteos rápidos (interactables, console errors, network failed,
+  uxFindings por heurística).
+- `actions` — los primeros 50 interactuables con `ref`/`role`/`name`/`selector`.
+- `layout` — geometría self-contained (para diffear).
+- `uxReport` — las heurísticas (ver abajo).
+- `outputs` — rutas a los archivos del run (en tmp si es efímero).
 
-Modo Diff:
-  visual-debug --diff <baseline> <candidate>    Compara dos manifests JSON
+### Page map (`<name>.map.json`)
 
-Opciones compartidas:
-  --out <dir>            Directorio de salida (default: ./.visual-debug)
-  --name <basename>      Basename para los outputs (default: timestamp)
-  --viewport <WxH>       Default 1440x900
-  --device <name>        Descriptor de device de Playwright (ej. "iPhone 14")
-  --wait <selector>      Espera por selector antes del primer snapshot
-  --wait-ms <ms>         Espera extra después del load (default 500)
-  --full-page            Screenshots full-page
-  --dark                 colorScheme oscuro
-  --no-screenshot --no-dom --no-console --no-network --no-a11y --no-perf
-  --no-page-map          Saltea el inventario de interactuables
-  --script <path>        Corre un archivo JS dentro de la página
-  --auth-storage <path>  storageState JSON
-  --user-agent <str>     Override del UA
-  --executable <path>    Binario de Chromium
-  --slow                 250ms de slowMo
-  --quiet                Sólo emite JSON
-  --fail-on <kinds>      Categorías para exit code del diff (default: console,network)
+Inventario completo de interactuables, forms, landmarks y headings, cada uno con
+`ref` estable, `role`, `name` accesible, `selector` robusto y `bbox`. El
+manifest ya embebe los primeros 50 en `actions`; abrí el map solo si necesitás
+más de 50 o los forms/landmarks completos.
+
+### Layout SVG (`<name>.layout.svg`)
+
+La feature estrella. Representación **vectorial** del layout, generada del page
+map + bounding boxes (sin rasterizar). Leelo con Read: es texto, lo "ves" sin
+gastar tokens de imagen.
+
+- Un `<rect>` por interactuable, posicionado por su bbox, con `data-ref`,
+  `data-role`, `data-name`.
+- Color por familia de rol: inputs azul, buttons verde, links violeta.
+- Landmarks como regiones de fondo; headings como rects con label.
+- Los elementos flaggeados por las heurísticas tienen **borde rojo punteado** y
+  un atributo `data-issue` con los códigos. Buscá `data-issue=` en el SVG para
+  saltar directo a lo problemático.
+
+### uxReport (heurísticas)
+
+Objeto en el manifest. Cada heurística es un array de
+`{ ref?, selector?, code, message, severity }`. Los collectors corren en
+try/catch; los fallos van a `uxReport.errors[]` y nunca rompen la corrida.
+
+Geometría:
+
+| Código | Qué detecta |
+|---|---|
+| `overflow` | el documento desborda horizontal/vertical |
+| `offscreen` | interactuables fuera del viewport |
+| `tinyTapTargets` | targets < 44×44 (WCAG 2.5.5) |
+| `overlaps` | interactuables que se solapan >50% (z-index/stacking) |
+| `truncatedText` | texto cortado con `text-overflow: ellipsis` |
+
+Accesibilidad:
+
+| Código | Qué detecta |
+|---|---|
+| `unlabeledInputs` | fields sin `<label>`/`aria-label`/`aria-labelledby` |
+| `unnamedButtons` | botones/links con nombre accesible vacío |
+| `headingOrderJumps` | saltos de nivel (h2 → h4) |
+| `missingLandmarks` | falta `<main>`, `<nav>` o `<header>` |
+| `imagesWithoutAlt` | `<img>` sin atributo `alt` (`alt=""` es válido) |
+| `lowContrastPairs` | contraste WCAG < 4.5:1 (texto normal) o < 3:1 (grande) |
+
+### Screenshot (opt-in, normalmente NO)
+
+Apagado por default. Activalo solo si lo necesitás de verdad:
+
+```bash
+--screenshots            # raster en todos los snapshots
+--screenshot-on-issue    # raster SOLO si hay un finding severity:'error'
+--screenshot-format webp # default; cae a jpeg q70 en Playwright 1.x
 ```
+
+Si no hay un PNG/JPEG en `outputs.screenshot`, **no lo busques**: no se generó a
+propósito. Leé el SVG.
 
 ---
 
-## Loop de iteración continua para agentes de IA
+## Efímero vs persistente
 
-El loop que está pensado para el agente:
+**Sesgo fuerte hacia efímero.** Un run es una conversación con la página, no un
+artefacto permanente.
 
+```bash
+# Efímero (default): vive en tmp, se borra al salir. No toca el repo.
+visual-debug <url>
+
+# Persistente nombrado: SOLO para baselines de un trabajo largo.
+visual-debug <url> --persist-as login-baseline
+
+# Persistente auto-nombrado, con retención (default --keep 1):
+visual-debug <url> --persist --keep 3
 ```
-1. visual-debug <url> --name baseline       # snapshot del estado actual + page map
-2. el agente lee baseline.manifest.json     # elige ref o selector para la próxima acción
-3. el agente arma un flow JSON inline       # acciones apuntando a refs/roles/text
-4. visual-debug --flow - --name attempt-1   # pipea por stdin, obtiene nuevos snapshots
-5. visual-debug --diff baseline.manifest.json attempt-1-final.manifest.json
-6. lee diff.verdict
-   - "neutral"     → no hubo cambio; revisa el plan
-   - "changed"     → delta esperado; continúa
-   - "regression"  → revertir / iterar
-7. goto 2
-```
 
-Todo en disco. El agente lee JSON con `cat`/`jq` — cero tokens extra de contexto.
+Cuándo persistir (`--persist-as`):
+
+- Vas a hacer un **refactor grande** y querés un baseline para comparar después.
+- Querés **capturar un estado roto reproducible** para un bug report
+  (combinalo con `--screenshot-on-issue`).
+
+Cuándo **NO** persistir:
+
+- "Por las dudas". No. Usá efímero.
+- En cada save de archivo. No.
+
+`--persist-as <nombre>` sobreescribe el dir si ya existe (vos lo nombraste, vos
+sos dueño). Lo persistido va a `.visual-debug/<nombre>/` — agregá `.visual-debug/`
+al `.gitignore` (no lo commitees).
 
 ---
 
-## Recetas
+## Subcomando runs
 
-### Inspección one-shot
-
-```bash
-visual-debug http://localhost:3000/checkout --full-page --wait "[data-step=payment]"
-```
-
-### Auth + inspección
+Mantenimiento de runs persistidos. **Destructivo**, por eso vive bajo un
+subcomando: nunca se dispara por accidente.
 
 ```bash
-visual-debug http://localhost:3000/dashboard --auth-storage ~/.auth/myapp.json
+# Listar runs persistidos, con chequeo fresh/stale/unknown.
+# (re-snapshotea la URL del manifest y compara contra el page map guardado)
+visual-debug runs --list
+
+# Borrar runs cuyo DOM ya no matchea el baseline (no toca los 'unknown').
+visual-debug runs --prune-stale --yes
+
+# Borrar runs más viejos que una duración (7d, 12h, 30m).
+visual-debug runs --prune-older-than 7d --yes
+
+# Borrar TODO lo persistido.
+visual-debug runs --clean --yes
 ```
 
-### Regresión visual en CI
-
-```bash
-visual-debug http://staging/$URL --name baseline --quiet
-deploy_my_change
-visual-debug http://staging/$URL --name after --quiet
-visual-debug --diff baseline.manifest.json after.manifest.json --fail-on any
-# El job falla si algo se regresó
-```
-
-### Mobile + gate de perf
-
-```bash
-visual-debug http://staging --device "iPhone 14" --no-screenshot --no-dom --no-a11y --quiet \
-  | jq -e '.summary.perf.fcp < 2000'
-```
-
-### Flow inline de un agente (uso típico desde Droid / Claude Code)
-
-```bash
-echo '{
-  "name": "verify-feature",
-  "baseUrl": "http://localhost:3000",
-  "steps": [
-    { "navigate": "/admin" },
-    { "fill": { "[name=user]": "admin", "[name=pass]": "$ADMIN_PASS" } },
-    { "click": { "role": "button", "name": "Log in" } },
-    { "wait": "[data-page=dashboard]" },
-    { "snapshot": "post-login" },
-    { "eval": "() => !!document.querySelector(\"[data-feature-flag=new-dashboard]\")" }
-  ]
-}' | visual-debug --flow - --quiet
-```
+Sin `--yes` te pide confirmación interactiva (y se niega si no hay TTY).
 
 ---
 
-## Integración con Factory Droid (skill)
+## Contratos JSON (campos con garantías de estabilidad)
 
-El repo incluye una skill de Factory en `skills/visual-debug/SKILL.md` que le
-enseña al agente **cuándo y cómo** usar la herramienta solo — sin que tengas que
-explicárselo cada vez.
+Todo campo marcado **stable** es API: no se renombra ni se elimina entre minors.
 
-Instalar:
+### Manifest de snapshot (`type: "snapshot"`)
 
-```bash
-mkdir -p ~/.factory/skills/visual-debug
-cp skills/visual-debug/SKILL.md ~/.factory/skills/visual-debug/
-```
+| Campo | Estable | Descripción |
+|---|---|---|
+| `type` | ✅ | `"snapshot"` |
+| `name` | ✅ | basename del run |
+| `url` / `finalUrl` | ✅ | URL pedida / URL final tras redirects |
+| `title` | ✅ | `<title>` de la página |
+| `viewport` | ✅ | `[width, height]` |
+| `outputs` | ✅ | rutas a archivos del run (`dom`, `console`, `network`, `a11y`, `perf`, `pageMap`, `layoutSvg`, `screenshot`) |
+| `summary` | ✅ | conteos: `console`, `network`, `perf`, `pageMap`, `uxFindings` |
+| `actions[]` | ✅ | primeros 50 interactuables: `{ ref, role, name, selector }` |
+| `layout` | ✅ (v0.3) | `{ viewport, elements:[{ref,role,name,bbox}], landmarks }` |
+| `layoutSvg` | ✅ (v0.3) | ruta al `.layout.svg` |
+| `uxReport` | ✅ (v0.3) | heurísticas (ver tabla arriba) + `errors[]` |
+| `manifestPath` | ✅ | ruta al manifest en disco |
 
-Una vez instalada, la skill se auto-activa cuando le pedís cosas como "mirá cómo
-se ve el dashboard", "hay errores en esta página", "comparemos antes vs después",
-o "arreglá el layout del hero". El agente:
+### uxReport finding
 
-- Verifica que el dev server esté corriendo (y lo levanta si hace falta).
-- Toma el snapshot, lee el manifest, y abre el `.png` para evaluar lo visual.
-- Si estás iterando sobre la UI, corre el loop completo snapshot → editar →
-  snapshot → diff → veredicto.
-- Nunca pide habilitar un MCP para esto: todo corre por shell con cero contexto.
+| Campo | Estable | Descripción |
+|---|---|---|
+| `code` | ✅ | identificador de la heurística |
+| `message` | ✅ | descripción humana |
+| `severity` | ✅ | `'info'` \| `'warn'` \| `'error'` |
+| `ref` | ✅ | ref del interactuable (si aplica) |
+| `selector` | ✅ | selector CSS (si aplica) |
 
-Es el complemento natural de
-[factory-mcp-tools](https://github.com/Jcibernet/factory-mcp-tools): ahí
-mantenés Playwright MCP deshabilitado por default, y acá tenés la visibilidad de
-navegador igual, gratis.
+### Diff (`type: "diff"`)
+
+| Campo | Estable | Descripción |
+|---|---|---|
+| `verdict` | ✅ | `'neutral'` \| `'changed'` \| `'regression'` |
+| `flags` | ✅ | booleanos por categoría: `console`, `network`, `perf`, `dom`, `screenshot`, `layout`, `ux`, `any` |
+| `console` | ✅ | `{ newErrors[], fixed[] }` |
+| `network` | ✅ | `{ newFailures[], totalDelta }` |
+| `perf` | ✅ | `{ fcpDelta, loadDelta }` |
+| `dom` | ✅ | `{ added, removed, mutated }` |
+| `layout` | ✅ (v0.3) | `{ added, removed, moved, movedRefs[] }` |
+| `ux` | ✅ (v0.3) | `{ newFindings[], resolved[], newCount, resolvedCount }` |
+| `summaryLine` | ✅ | one-liner del diff |
+
+### Page map (`<name>.map.json`)
+
+| Campo | Estable | Descripción |
+|---|---|---|
+| `interactables[]` | ✅ | `{ ref, role, name, selector, value, checked, disabled, bbox }` |
+| `forms[]` | ✅ | `{ selector, action, method, fields[] }` |
+| `landmarks[]` | ✅ | `{ role, selector, name, bbox }` |
+| `headings[]` | ✅ | `{ level, text, selector, bbox }` |
 
 ---
 
-## Comparación
+## Costos de tokens aproximados
 
-|  | visual-debug | Playwright MCP | Script de Puppeteer | Lighthouse CLI |
-|---|---|---|---|---|
-| Tokens de contexto (sesión de agente) | **0** | ~3.500 | 0 | 0 |
-| Screenshot | ✅ | ✅ | ✅ | ✅ |
-| Captura de console / network | ✅ | ✅ | manual | parcial |
-| Árbol de accesibilidad | ✅ | ✅ | manual | sólo scores |
-| Métricas de perf | ✅ | parcial | manual | ✅ (más rico) |
-| Page map / inventario de interactuables | ✅ | parcial | ❌ | ❌ |
-| Flows declarativos multi-step | ✅ | imperativo | imperativo | ❌ |
-| Diff entre corridas con exit code | ✅ | ❌ | manual | ❌ |
-| Single file, cero config | ✅ | ❌ | ❌ | ✅ |
+| Output | Tamaño típico | ¿Leer? |
+|---|---|---|
+| **manifest** | ~5–20 KB | **SÍ** — empezá acá |
+| **layout SVG** | ~10–50 KB | **SÍ** — para juzgar layout |
+| **uxReport** (dentro del manifest) | ~1–5 KB | **SÍ** — para problemas UX/a11y |
+| page map | ~5–30 KB | solo si necesitás >50 interactuables |
+| PNG/JPEG | ~100–500 KB | **NO** — salvo `--screenshot-on-issue` con error |
 
-**No reemplaza a Playwright MCP** en flujos profundamente interactivos. **Sí es** el default más barato y rápido para loops de snapshot + navigate + diff.
+**Recomendación: preferí SVG + uxReport, saltá el PNG.** Una imagen de 300KB en
+contexto cuesta órdenes de magnitud más que el SVG vectorial que dice lo mismo
+en texto.
+
+---
+
+## Limitaciones conocidas
+
+- **Layout SVG ≠ render fiel.** Es la *geometría* de los interactuables y
+  landmarks, no los pixeles. No detecta problemas de color/imagen/tipografía más
+  allá de lo que cubren las heurísticas. Para eso puntual, `--screenshots`.
+- **Contraste WCAG es aproximado.** Calcula luminancia relativa sobre
+  color/background-color computados, resolviendo el primer ancestro con fondo
+  opaco. No maneja gradientes, imágenes de fondo ni `mix-blend-mode`.
+- **WebP cae a JPEG.** Playwright 1.x no emite WebP; `--screenshot-format webp`
+  usa JPEG q70 con un aviso por stderr.
+- **`overlaps` se limita** a los primeros 250 interactuables por costo O(n²).
+- **El chequeo fresh/stale de `runs --list`** re-snapshotea la URL del manifest;
+  si la app no está corriendo, el run queda `unknown` (y `--prune-stale` no lo
+  toca).
+- **No reemplaza a Playwright MCP** en flujos profundamente interactivos paso a
+  paso dentro de un mismo turno. Sí es el default más barato para inspección,
+  navegación por flow, regresión y auditoría UX.
 
 ---
 
 ## Cómo funciona
 
-`visual-debug.js` es un único archivo ESM usando Chromium headless de Playwright. Forza `QT_QPA_PLATFORM=xcb` para sobrevivir desktops Wayland con plugins Qt rotos. Los collectors se registran antes de la navegación, cada captura está envuelta en try/catch (un asset roto nunca rompe la corrida entera), y cada step de un flow se timea y se loguea en el manifest del flow.
-
-Los refs del page map se derivan de un walk fresco del DOM en el momento del step, así que no quedan stale después de re-renders.
+`visual-debug.js` es un único archivo ESM sobre Chromium headless de Playwright.
+Forza `QT_QPA_PLATFORM=xcb` para sobrevivir desktops Wayland con plugins Qt
+rotos. El page map y el uxReport salen de un único walk del DOM por snapshot;
+cada collector está envuelto en try/catch (un asset roto nunca rompe la corrida).
+El layout SVG lo genera una función pura `renderLayoutSvg(pageMap, uxReport,
+viewport)` — data → string, sin DOM ni Playwright. El run efímero se limpia con
+un handler idempotente sobre `exit`/`beforeExit`/`SIGINT`/`SIGTERM`/`uncaughtException`.
 
 ---
 
@@ -382,9 +443,9 @@ Los refs del page map se derivan de un walk fresco del DOM en el momento del ste
 
 PRs bienvenidas. Restricciones:
 
-- Mantener un solo archivo (o agregar una carpeta `lib/`, pero que el entrypoint quede mínimo).
+- Un solo archivo (`visual-debug.js`). El entrypoint queda mínimo.
 - La única dep de runtime sigue siendo `playwright`.
-- Tratar cada campo expuesto al agente como **API estable** una vez shippeado — los agentes lo leen.
+- Tratar cada campo expuesto al agente como **API estable** una vez shippeado.
 
 ---
 

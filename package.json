@@ -1,7 +1,7 @@
 {
   "name": "@jcibernet/visual-debug",
-  "version": "0.2.0",
-  "description": "Agent-first headless browser snapshots with full devtools dump, declarative multi-step flows, and run-vs-run diffs. Built for AI coding agents (Claude Code, Droid, Cursor) and CLI workflows.",
+  "version": "0.3.0",
+  "description": "The agent's UI/UX inspector: ephemeral headless runs with layout SVG, geometry/accessibility heuristics, declarative multi-step flows, and run-vs-run diffs. Built for AI coding agents (Claude Code, Droid, Cursor) with zero MCP context cost.",
   "type": "module",
   "bin": {
     "visual-debug": "./visual-debug.js"
@@ -13,7 +13,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "smoke": "node visual-debug.js https://example.com --out /tmp/vd-smoke --name smoke --viewport 800x600"
+    "smoke": "node visual-debug.js https://example.com --persist-as smoke --viewport 800x600"
   },
   "dependencies": {
     "playwright": "^1.49.0"
@@ -22,13 +22,15 @@
     "playwright",
     "headless",
     "chromium",
-    "screenshot",
-    "devtools",
+    "layout-svg",
+    "ux-audit",
     "accessibility",
+    "wcag",
     "performance",
     "ai-agent",
     "cli",
-    "visual-regression"
+    "visual-regression",
+    "ephemeral"
   ],
   "author": "Juan Cibernet (https://github.com/Jcibernet)",
   "license": "MIT",
