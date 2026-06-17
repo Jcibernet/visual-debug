@@ -7,7 +7,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-MIT-1f6bff?style=for-the-badge&labelColor=05030f" alt="license"></a>
   <img src="https://img.shields.io/badge/NODE-%3E%3D18-1f6bff?style=for-the-badge&labelColor=05030f" alt="node">
   <img src="https://img.shields.io/badge/MCP_COST-0_TOKENS-ffd23d?style=for-the-badge&labelColor=05030f" alt="zero context">
-  <img src="https://img.shields.io/badge/OUTPUT-VECTOR_NOT_PIXELS-ff3df0?style=for-the-badge&labelColor=05030f" alt="vector">
+  <img src="https://img.shields.io/badge/OUTPUT-VECTOR_NOT_PIXELS-39ff14?style=for-the-badge&labelColor=05030f" alt="vector">
 </p>
 
 # visual-debug
