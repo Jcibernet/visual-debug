@@ -197,3 +197,26 @@ Sé concreto y con evidencia del uxReport y el diff: "El form tiene 2 inputs sin
 label (uxReport.unlabeledInputs) y un botón con nombre accesible vacío. El diff
 no muestra regresión de layout (verdict=neutral)." Mostrá el resultado, no el
 proceso.
+
+---
+
+## Mantener esta skill (solo si la usás y falla)
+
+Editá este archivo SOLO ante una señal real: un flag documentado acá ya no
+existe, repetiste un anti-patrón, o tuviste que improvisar una decisión no obvia
+≥2 veces. No agregues "por las dudas" — una skill larga es una skill que nadie
+lee entera.
+
+Antes de editar, chequeá drift contra el tool real:
+
+```bash
+# Lo que documenta la skill pero ya no existe en el binario (debe dar vacío):
+comm -23 \
+  <(grep -oE '\-\-[a-z][a-z0-9-]+' skills/visual-debug/SKILL.md | sort -u) \
+  <(visual-debug --help 2>&1 | grep -oE '\-\-[a-z][a-z0-9-]+' | sort -u)
+```
+
+Reglas de edición: imperativo + condición observable ("Si `uxReport.errors[]` no
+está vacío…"), una decisión por bullet, sin "y/o" ni "en general". Lo
+project-specific (URLs, puertos fijos) va a un override local, no acá. Bumpeá
+`metadata.version` solo si removés reglas o cambiás defaults.
