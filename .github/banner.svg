@@ -38,13 +38,13 @@
   <rect x="14" y="14" width="872" height="272" rx="10" fill="none" stroke="#ff3df0" stroke-width="1.5" opacity="0.35"/>
 
   <!-- top HUD bar -->
-  <text x="34" y="44" font-family="'Courier New', monospace" font-size="15" font-weight="700" letter-spacing="2" fill="#ff3df0" filter="url(#glowMag)">1UP</text>
+  <text x="34" y="44" font-family="'Courier New', monospace" font-size="15" font-weight="700" letter-spacing="2" fill="#ff2b3d" filter="url(#glowMag)">1UP</text>
   <text x="34" y="64" font-family="'Courier New', monospace" font-size="13" font-weight="700" letter-spacing="2" fill="#3dff9e">SHOTS x6</text>
   <text x="866" y="44" text-anchor="end" font-family="'Courier New', monospace" font-size="15" font-weight="700" letter-spacing="2" fill="#ffd23d">HI-SCORE</text>
   <text x="866" y="64" text-anchor="end" font-family="'Courier New', monospace" font-size="13" font-weight="700" letter-spacing="2" fill="#aee3ff">999999</text>
 
   <!-- pixel hearts (lives) -->
-  <g fill="#ff3df0" filter="url(#glowMag)">
+  <g fill="#ff2b3d" filter="url(#glowMag)">
     <g transform="translate(404,32)"><rect x="2" y="2" width="6" height="6"/><rect x="10" y="2" width="6" height="6"/><rect x="0" y="8" width="18" height="6"/><rect x="3" y="14" width="12" height="4"/><rect x="6" y="18" width="6" height="3"/></g>
     <g transform="translate(430,32)"><rect x="2" y="2" width="6" height="6"/><rect x="10" y="2" width="6" height="6"/><rect x="0" y="8" width="18" height="6"/><rect x="3" y="14" width="12" height="4"/><rect x="6" y="18" width="6" height="3"/></g>
     <g transform="translate(456,32)"><rect x="2" y="2" width="6" height="6"/><rect x="10" y="2" width="6" height="6"/><rect x="0" y="8" width="18" height="6"/><rect x="3" y="14" width="12" height="4"/><rect x="6" y="18" width="6" height="3"/></g>
