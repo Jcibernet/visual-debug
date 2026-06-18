@@ -451,4 +451,4 @@ PRs bienvenidas. Restricciones:
 
 ## Licencia
 
-MIT © Juan Cibernet
+MIT © Juan Campias
