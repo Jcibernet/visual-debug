@@ -1,6 +1,6 @@
 {
   "name": "@jcibernet/visual-debug",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "The agent's UI/UX inspector: ephemeral headless runs with layout SVG, geometry/accessibility heuristics, declarative multi-step flows, and run-vs-run diffs. Built for AI coding agents (Claude Code, Droid, Cursor) with zero MCP context cost.",
   "type": "module",
   "bin": {

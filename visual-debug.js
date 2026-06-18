@@ -96,7 +96,7 @@ async function runUrlMode(argv) {
   const opts = parseSharedOpts(argv.slice(1));
 
   if (!opts.executable) opts.executable = defaultChromium();
-  if (!existsSync(opts.executable)) chromiumNotFound(opts.executable);
+  if (!opts.executable || !existsSync(opts.executable)) chromiumNotFound(opts.executable);
 
   process.env.QT_QPA_PLATFORM = process.env.QT_QPA_PLATFORM || 'xcb';
 
@@ -152,7 +152,7 @@ async function runFlowMode(argv) {
   if (flow.name && !cliHas(argv, '--name')) opts.name = flow.name;
 
   if (!opts.executable) opts.executable = defaultChromium();
-  if (!existsSync(opts.executable)) chromiumNotFound(opts.executable);
+  if (!opts.executable || !existsSync(opts.executable)) chromiumNotFound(opts.executable);
   process.env.QT_QPA_PLATFORM = process.env.QT_QPA_PLATFORM || 'xcb';
 
   const outDir = resolveRunDir(opts);
@@ -199,7 +199,8 @@ async function runFlowMode(argv) {
         }
       } else if (step.action === 'type') {
         const el = await resolveTarget(page, step);
-        await el.type(String(step.value), { delay: step.delay || 0 });
+        // pressSequentially replaces the deprecated locator.type()
+        await el.pressSequentially(String(step.value), { delay: step.delay || 0 });
       } else if (step.action === 'press') {
         await page.keyboard.press(step.key || step.value);
       } else if (step.action === 'select') {
@@ -492,8 +493,8 @@ function actionsSignature(actions) {
 // Re-snapshot the URL with the existing page-map collector and compare the
 // top-level interactable signature. fresh | stale | unknown.
 async function staleStatus(url, baselineRefs) {
-  let executable = process.env.VISUAL_DEBUG_CHROMIUM || defaultChromium();
-  if (!existsSync(executable)) return 'unknown';
+  const executable = defaultChromium();
+  if (!executable || !existsSync(executable)) return 'unknown';
   process.env.QT_QPA_PLATFORM = process.env.QT_QPA_PLATFORM || 'xcb';
   let browser;
   try {
@@ -1547,8 +1548,41 @@ function detectMode(argv) {
 function cliHas(argv, flag) { return argv.includes(flag); }
 function parseViewport(v) { return v.split('x').map(n => parseInt(n, 10)); }
 function defaultChromium() {
-  return process.env.VISUAL_DEBUG_CHROMIUM
-    || '/home/jcibernet/.cache/ms-playwright/chromium-1217/chrome-linux64/chrome';
+  // 1) Explicit override always wins.
+  if (process.env.VISUAL_DEBUG_CHROMIUM) return process.env.VISUAL_DEBUG_CHROMIUM;
+
+  // 2) Ask Playwright where its bundled Chromium is. This tracks the version
+  //    Playwright expects and is portable across machines/users.
+  let expected = null;
+  try { expected = chromium.executablePath(); } catch { /* noop */ }
+  if (expected && existsSync(expected)) return expected;
+
+  // 3) Version drift: Playwright was upgraded but `playwright install` wasn't
+  //    re-run, so the expected build (e.g. chromium-1223) is missing while an
+  //    older one (chromium-1217) still sits in the cache. Scan the cache root
+  //    for ANY installed Chromium and use the newest. Keeps the tool working
+  //    instead of hard-failing on a build-number mismatch.
+  const cacheRoot = expected
+    ? expected.slice(0, expected.indexOf('ms-playwright') + 'ms-playwright'.length)
+    : null;
+  if (cacheRoot && existsSync(cacheRoot)) {
+    try {
+      const builds = readdirSync(cacheRoot, { withFileTypes: true })
+        .filter(d => d.isDirectory() && /^chromium-\d+$/.test(d.name))
+        .map(d => ({ n: parseInt(d.name.split('-')[1], 10), name: d.name }))
+        .sort((a, b) => b.n - a.n);
+      for (const b of builds) {
+        for (const sub of ['chrome-linux64/chrome', 'chrome-linux/chrome', 'chrome-mac/Chromium.app/Contents/MacOS/Chromium', 'chrome-win/chrome.exe']) {
+          const cand = join(cacheRoot, b.name, sub);
+          if (existsSync(cand)) return cand;
+        }
+      }
+    } catch { /* noop */ }
+  }
+
+  // 4) Last resort: return the expected path (may be null) so the caller emits
+  //    the "run playwright install" hint.
+  return expected;
 }
 function chromiumNotFound(p) {
   console.error(`Chromium not found at ${p}.\nSet VISUAL_DEBUG_CHROMIUM, pass --executable, or run: npx playwright install chromium`);

@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.1] — Portabilidad y deprecaciones
+
+### Fixed
+- **Ruta de Chromium ya no está hardcodeada.** Antes el default apuntaba a un
+  home dir y build fijos (`/home/<user>/.cache/.../chromium-1217/...`), lo que
+  rompía en cualquier otra máquina y al actualizar Playwright. Ahora
+  `defaultChromium()` resuelve vía `chromium.executablePath()` y, si esa build
+  no está instalada (drift de versión: Playwright actualizado sin re-correr
+  `playwright install`), escanea el cache de `ms-playwright` y usa el Chromium
+  más nuevo que encuentre. Sigue respetando `VISUAL_DEBUG_CHROMIUM` y
+  `--executable`.
+- **`locator.type()` (deprecado) → `locator.pressSequentially()`** en el step
+  `type` del modo flow.
+
 ## [0.3.0] — El ojo crítico UI/UX
 
 El tool deja de ser un "snapshotter que persiste por default" y pasa a ser un
