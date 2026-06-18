@@ -35,7 +35,7 @@
 
   <!-- neon cabinet frame -->
   <rect x="6" y="6" width="888" height="288" rx="14" fill="none" stroke="#1f6bff" stroke-width="3" opacity="0.9" filter="url(#glow)"/>
-  <rect x="14" y="14" width="872" height="272" rx="10" fill="none" stroke="#ff3df0" stroke-width="1.5" opacity="0.35"/>
+  <rect x="14" y="14" width="872" height="272" rx="10" fill="none" stroke="#ff2b3d" stroke-width="1.5" opacity="0.35"/>
 
   <!-- top HUD bar -->
   <text x="34" y="44" font-family="'Courier New', monospace" font-size="15" font-weight="700" letter-spacing="2" fill="#ff2b3d" filter="url(#glowMag)">1UP</text>
