@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * visual-debug v0.3 — the agent's UI/UX inspector.
+ * visual-debug v0.4 — the agent's UI/UX inspector.
  *
  * Ephemeral by default. A run is a conversation with the page, not a permanent
  * artifact: it lives in a tmp dir and is deleted on exit. Persistence is opt-in
@@ -42,6 +42,14 @@ import readline from 'node:readline';
 let EPHEMERAL_DIR = null;
 let CLEANED = false;
 let WEBP_WARNED = false;
+
+// Built-in device presets used by --device-matrix. Each maps to a viewport,
+// pointer type and tap-target threshold so the uxReport adapts per form factor.
+const DEVICE_PRESETS = {
+  mobile:  { label: 'mobile',  viewport: [390, 844],  pointer: 'coarse', minTap: 44, playwright: 'iPhone 13' },
+  tablet:  { label: 'tablet',  viewport: [820, 1180], pointer: 'coarse', minTap: 44, playwright: 'iPad (gen 7)' },
+  desktop: { label: 'desktop', viewport: [1440, 900], pointer: 'fine',   minTap: 24, playwright: null },
+};
 
 function registerCleanup() {
   const cleanup = () => {
@@ -102,32 +110,97 @@ async function runUrlMode(argv) {
 
   const outDir = resolveRunDir(opts);
 
+  // --device-matrix runs the same URL across several form factors in one shot.
+  const presets = opts.deviceMatrix; // array of preset names or null
+  const profiles = presets
+    ? presets.map(p => resolveProfile(opts, p))
+    : [resolveProfile(opts, null)];
+
   const browser = await launchBrowser(opts);
-  const context = await newContext(browser, opts);
-  const page = await context.newPage();
-  const collectors = attachCollectors(page, opts);
-
-  const navMs = await navigate(page, url, opts);
-
-  const manifest = await snapshot(page, {
-    name: opts.name,
-    outDir,
-    url,
-    navMs,
-    viewport: parseViewport(opts.viewport),
-    device: opts.device,
-    colorScheme: opts.dark ? 'dark' : 'light',
-    collectors,
-    captureFlags: opts.capture,
-    fullPage: opts.fullPage,
-    screenshotMode: opts.screenshotMode,
-    screenshotFormat: opts.screenshotFormat,
-  });
-
-  await context.close();
+  const perDevice = [];
+  for (const profile of profiles) {
+    const context = await newContext(browser, opts, profile);
+    const page = await context.newPage();
+    const collectors = attachCollectors(page, opts);
+    const navMs = await navigate(page, url, opts);
+    const snapName = presets ? `${opts.name}-${profile.label}` : opts.name;
+    const m = await snapshot(page, {
+      name: snapName,
+      outDir,
+      url,
+      navMs,
+      viewport: profile.viewport,
+      device: profile.playwright || opts.device,
+      profile,
+      colorScheme: opts.dark ? 'dark' : 'light',
+      collectors,
+      captureFlags: opts.capture,
+      fullPage: opts.fullPage,
+      screenshotMode: opts.screenshotMode,
+      screenshotFormat: opts.screenshotFormat,
+    });
+    await context.close();
+    perDevice.push(m);
+  }
   await browser.close();
 
-  emit(manifest, opts);
+  // Single profile → emit the snapshot manifest as before (back-compat).
+  if (!presets) { emit(perDevice[0], opts); return; }
+
+  // Matrix → emit a combined manifest with a cross-device UX comparison.
+  const matrix = buildDeviceMatrixManifest(url, opts, perDevice, outDir);
+  emit(matrix, opts);
+}
+
+// Combine per-device snapshots into one manifest, highlighting findings that
+// appear on some devices but not others (the responsive-bug signal).
+function buildDeviceMatrixManifest(url, opts, perDevice, outDir) {
+  const byDevice = perDevice.map(m => ({
+    device: m.profile?.label || m.name,
+    name: m.name,
+    manifestPath: m.manifestPath,
+    layoutSvg: m.layoutSvg,
+    viewport: m.viewport,
+    uxFindings: m.summary?.uxFindings || {},
+    errorFindings: countErrorFindings(m.uxReport),
+  }));
+
+  // Per-heuristic: which devices flagged it. A finding present on a subset is a
+  // device-specific regression worth surfacing.
+  const heuristics = new Set();
+  for (const d of perDevice) for (const k of Object.keys(d.summary?.uxFindings || {})) heuristics.add(k);
+  const crossDevice = {};
+  for (const h of heuristics) {
+    const on = perDevice.filter(d => (d.summary?.uxFindings?.[h] || 0) > 0).map(d => d.profile?.label || d.name);
+    if (on.length > 0 && on.length < perDevice.length) crossDevice[h] = { flaggedOn: on, cleanOn: perDevice.filter(d => !on.includes(d.profile?.label || d.name)).map(d => d.profile?.label || d.name) };
+  }
+
+  const manifest = {
+    type: 'device-matrix',
+    url,
+    devices: byDevice,
+    deviceSpecificFindings: crossDevice,
+    summary: {
+      devices: byDevice.map(d => d.device),
+      worstDevice: byDevice.slice().sort((a, b) => b.errorFindings - a.errorFindings)[0]?.device || null,
+      deviceSpecificCount: Object.keys(crossDevice).length,
+    },
+    generatedAt: new Date().toISOString(),
+  };
+  const p = join(outDir, `${opts.name}.matrix.json`);
+  writeFileSync(p, JSON.stringify(manifest, null, 2));
+  manifest.manifestPath = p;
+  return manifest;
+}
+
+function countErrorFindings(ux) {
+  if (!ux) return 0;
+  let n = 0;
+  for (const [k, v] of Object.entries(ux)) {
+    if (k === 'errors' || !Array.isArray(v)) continue;
+    n += v.filter(f => f && f.severity === 'error').length;
+  }
+  return n;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -217,6 +290,7 @@ async function runFlowMode(argv) {
           await page.evaluate((y) => window.scrollTo(0, y), step.y || 0);
         }
       } else if (step.action === 'eval') {
+        if (opts.noEval) throw new Error('eval step disabled by --no-eval');
         entry.result = await page.evaluate(step.value);
       } else if (step.action === 'snapshot') {
         const snapName = step.name || `${opts.name}-step${stepIdx}`;
@@ -498,9 +572,10 @@ async function staleStatus(url, baselineRefs) {
   process.env.QT_QPA_PLATFORM = process.env.QT_QPA_PLATFORM || 'xcb';
   let browser;
   try {
+    const dec = sandboxDecision({});
     browser = await chromium.launch({
       executablePath: executable, headless: true,
-      args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
+      args: launchArgs(dec.sandbox),
     });
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
@@ -582,6 +657,7 @@ async function snapshot(page, ctx) {
     navMs: ctx.navMs,
     viewport,
     device: ctx.device,
+    profile: ctx.profile ? { label: ctx.profile.label, pointer: ctx.profile.pointer, minTap: ctx.profile.minTap } : null,
     colorScheme: ctx.colorScheme,
     outputs: {},
     summary: {},
@@ -669,7 +745,7 @@ async function snapshot(page, ctx) {
   let ux = null;
   if (cap.pageMap) {
     try {
-      const state = await extractPageState(page);
+      const state = await extractPageState(page, ctx.profile);
       map = state.map;
       ux = state.ux;
       writeFileSync(paths.pageMap, JSON.stringify(map, null, 2));
@@ -857,8 +933,8 @@ function trunc(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n -
 // Page map + uxReport — single browser walk
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function extractPageState(page) {
-  return await page.evaluate(() => {
+async function extractPageState(page, profile = { pointer: 'fine', minTap: 24, label: 'desktop' }) {
+  return await page.evaluate((profile) => {
     // ── shared helpers (browser context) ──
     const stableSelector = (el) => {
       if (el.id && /^[A-Za-z][\w-]*$/.test(el.id)) return `#${el.id}`;
@@ -1003,11 +1079,17 @@ async function extractPageState(page) {
       return { r: 255, g: 255, b: 255, a: 1 };
     };
 
+    // Device-aware thresholds: touch needs 44px tap targets (WCAG 2.5.5) and
+    // horizontal overflow is a hard break; fine pointers tolerate 24px and an
+    // overflow-x is a softer warning.
+    const isTouch = profile.pointer === 'coarse';
+    const minTap = profile.minTap || (isTouch ? 44 : 24);
+
     try {
       // geometry: overflow on document root
       const de = document.documentElement;
       const overflow = F('overflow');
-      if (de.scrollWidth > de.clientWidth + 1) push(overflow, { selector: 'html', code: 'overflow-x', message: `scrollWidth ${de.scrollWidth} > clientWidth ${de.clientWidth}`, severity: 'warn' });
+      if (de.scrollWidth > de.clientWidth + 1) push(overflow, { selector: 'html', code: 'overflow-x', message: `scrollWidth ${de.scrollWidth} > clientWidth ${de.clientWidth}`, severity: isTouch ? 'error' : 'warn' });
       if (de.scrollHeight > de.clientHeight + 1) push(overflow, { selector: 'html', code: 'overflow-y', message: `scrollHeight ${de.scrollHeight} > clientHeight ${de.clientHeight}`, severity: 'info' });
     } catch (e) { ux.errors.push({ collector: 'overflow', message: e.message }); }
 
@@ -1019,11 +1101,28 @@ async function extractPageState(page) {
         if (b.x + b.w < 0 || b.y + b.h < 0 || b.x > vw || b.y > vh) {
           push(offscreen, { ref: rec.ref, selector: rec.selector, code: 'offscreen', message: `outside viewport (${b.x},${b.y})`, severity: 'warn' });
         }
-        if ((b.w < 44 || b.h < 44) && b.w > 0 && b.h > 0) {
-          push(tiny, { ref: rec.ref, selector: rec.selector, code: 'tiny-tap-target', message: `${b.w}x${b.h} < 44x44`, severity: 'warn', width: b.w, height: b.h });
+        if ((b.w < minTap || b.h < minTap) && b.w > 0 && b.h > 0) {
+          push(tiny, { ref: rec.ref, selector: rec.selector, code: 'tiny-tap-target', message: `${b.w}x${b.h} < ${minTap}x${minTap} (${profile.label})`, severity: isTouch ? 'error' : 'warn', width: b.w, height: b.h });
         }
       }
     } catch (e) { ux.errors.push({ collector: 'geometry', message: e.message }); }
+
+    // touch-only inaccessibility: hover-revealed interactables on a touch device.
+    try {
+      if (isTouch) {
+        const hoverOnly = F('hoverOnlyOnTouch');
+        for (const rec of interactiveEls) {
+          const el = rec.el;
+          if (!el) continue;
+          // crude heuristic: element relies on :hover to become usable if a
+          // parent has a hover handler and the element is initially clipped.
+          const cs = getComputedStyle(el);
+          if (cs.visibility === 'hidden' || cs.opacity === '0') {
+            push(hoverOnly, { ref: rec.ref, selector: rec.selector, code: 'hover-only-touch', message: 'interactable hidden until hover (no touch equivalent)', severity: 'warn' });
+          }
+        }
+      }
+    } catch (e) { ux.errors.push({ collector: 'hoverOnlyOnTouch', message: e.message }); }
 
     try {
       const overlaps = F('overlaps');
@@ -1126,8 +1225,9 @@ async function extractPageState(page) {
       }
     } catch (e) { ux.errors.push({ collector: 'lowContrastPairs', message: e.message }); }
 
+    ux.device = { label: profile.label, pointer: profile.pointer, minTap: profile.minTap };
     return { map: result, ux };
-  });
+  }, profile);
 }
 
 // Lighter wrapper used by resolveTarget and the runs stale-check.
@@ -1358,25 +1458,131 @@ function oneLineDiff(d) {
 // Browser plumbing
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function launchBrowser(opts) {
-  return await chromium.launch({
-    executablePath: opts.executable,
-    headless: true,
-    slowMo: opts.slow ? 250 : 0,
-    args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
-  });
+// Security: Chromium points at untrusted web content, so the sandbox is the
+// main barrier preventing a page exploit from reaching the host FS. Keep it ON
+// by default; only drop it where it cannot start (root / common CI / container).
+function sandboxDecision(opts) {
+  if (opts.noSandbox) return { sandbox: false, reason: 'forced by --no-sandbox' };
+  if (opts.sandbox) return { sandbox: true, reason: 'forced by --sandbox' };
+  const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+  const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.GITLAB_CI || process.env.BUILDKITE);
+  const inContainer = existsSync('/.dockerenv') || existsSync('/run/.containerenv');
+  if (isRoot || isCI || inContainer) {
+    const why = isRoot ? 'running as root' : (isCI ? 'CI environment' : 'container');
+    return { sandbox: false, reason: `auto-disabled (${why})` };
+  }
+  return { sandbox: true, reason: 'default' };
 }
 
-async function newContext(browser, opts) {
+function launchArgs(sandbox) {
+  const args = ['--disable-gpu', '--disable-dev-shm-usage'];
+  if (!sandbox) args.push('--no-sandbox');
+  return args;
+}
+
+async function launchBrowser(opts) {
+  const dec = sandboxDecision(opts);
+  if (!dec.sandbox && dec.reason !== 'forced by --no-sandbox') {
+    console.error(`note: Chromium sandbox ${dec.reason}. Pass --sandbox to force it on.`);
+  }
+  try {
+    return await chromium.launch({
+      executablePath: opts.executable,
+      headless: true,
+      slowMo: opts.slow ? 250 : 0,
+      args: launchArgs(dec.sandbox),
+    });
+  } catch (err) {
+    // If a sandboxed launch fails (e.g. missing kernel namespaces), retry once
+    // without the sandbox so the tool still works, but say so loudly.
+    if (dec.sandbox) {
+      console.error(`note: sandboxed Chromium failed to launch (${err.message.split('\n')[0]}); retrying with --no-sandbox.`);
+      return await chromium.launch({
+        executablePath: opts.executable,
+        headless: true,
+        slowMo: opts.slow ? 250 : 0,
+        args: launchArgs(false),
+      });
+    }
+    throw err;
+  }
+}
+
+// Resolve a profile for a single run from opts (preset name, Playwright device,
+// or raw viewport). Drives both the context and the device-aware heuristics.
+function resolveProfile(opts, presetName) {
+  if (presetName && DEVICE_PRESETS[presetName]) {
+    const p = DEVICE_PRESETS[presetName];
+    return { label: p.label, viewport: p.viewport, pointer: p.pointer, minTap: p.minTap, playwright: p.playwright };
+  }
+  if (opts.device && devices[opts.device]) {
+    const d = devices[opts.device];
+    const touch = !!d.hasTouch;
+    return {
+      label: opts.device,
+      viewport: [d.viewport.width, d.viewport.height],
+      pointer: touch ? 'coarse' : 'fine',
+      minTap: touch ? 44 : 24,
+      playwright: opts.device,
+    };
+  }
   const [vw, vh] = parseViewport(opts.viewport);
-  const contextOpts = { viewport: { width: vw, height: vh }, colorScheme: opts.dark ? 'dark' : 'light' };
-  if (opts.device && devices[opts.device]) Object.assign(contextOpts, devices[opts.device]);
+  // Infer pointer from width: narrow viewports are treated as touch.
+  const touch = vw <= 600;
+  return { label: `${vw}x${vh}`, viewport: [vw, vh], pointer: touch ? 'coarse' : 'fine', minTap: touch ? 44 : 24, playwright: null };
+}
+
+async function newContext(browser, opts, profile = null) {
+  const vp = profile ? profile.viewport : parseViewport(opts.viewport);
+  const contextOpts = { viewport: { width: vp[0], height: vp[1] }, colorScheme: opts.dark ? 'dark' : 'light' };
+  const pwDevice = profile?.playwright || opts.device;
+  if (pwDevice && devices[pwDevice]) Object.assign(contextOpts, devices[pwDevice], { viewport: { width: vp[0], height: vp[1] } });
   if (opts.userAgent) contextOpts.userAgent = opts.userAgent;
   if (opts.authStorage && existsSync(opts.authStorage)) contextOpts.storageState = opts.authStorage;
   return await browser.newContext(contextOpts);
 }
 
+// Security: block local-file reads and cloud metadata SSRF by default. The agent
+// opts in with --allow-file for local HTML, or --allow-private for LAN targets.
+function assertUrlAllowed(url, opts) {
+  let u;
+  try { u = new URL(url); } catch { return; } // relative/odd inputs handled by Playwright
+  const scheme = u.protocol.replace(':', '').toLowerCase();
+
+  if (scheme === 'file') {
+    if (!opts.allowFile) throw new Error(`file:// blocked (pass --allow-file to inspect local HTML): ${url}`);
+    return;
+  }
+  if (!['http', 'https'].includes(scheme)) {
+    throw new Error(`scheme '${scheme}' not allowed (only http/https; file:// needs --allow-file)`);
+  }
+  // Cloud metadata endpoints — never allowed regardless of flags.
+  const host = u.hostname.toLowerCase();
+  const META = new Set(['169.254.169.254', 'metadata.google.internal', '100.100.100.200', 'fd00:ec2::254']);
+  if (META.has(host)) throw new Error(`blocked cloud-metadata host: ${host}`);
+
+  if (!opts.allowPrivate && isPrivateHost(host)) {
+    throw new Error(`private LAN host blocked (pass --allow-private; localhost is always allowed): ${host}`);
+  }
+}
+
+function isPrivateHost(host) {
+  if (host === 'localhost' || host.endsWith('.localhost')) return false; // dev server: allowed
+  // localhost/loopback are the normal dev-server case → allowed. We only block
+  // non-localhost private ranges (LAN / link-local / metadata-adjacent).
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (!m) return false; // hostnames resolve at the network layer; we don't DNS here
+  const [a, b] = [parseInt(m[1], 10), parseInt(m[2], 10)];
+  if (a === 127) return false;             // loopback → dev server, allowed
+  if (a === 10) return true;               // 10/8
+  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16/12
+  if (a === 192 && b === 168) return true; // 192.168/16
+  if (a === 169 && b === 254) return true; // link-local
+  return false;
+}
+
 async function navigate(page, url, opts) {
+  assertUrlAllowed(url, opts);
   const t0 = Date.now();
   try {
     await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
@@ -1479,6 +1685,7 @@ function parseSharedOpts(rest) {
     name: new Date().toISOString().replace(/[:.]/g, '-'),
     viewport: '1440x900',
     device: null,
+    deviceMatrix: null, // array of preset names when --device-matrix is set
     wait: null,
     waitMs: 500,
     fullPage: false,
@@ -1498,6 +1705,12 @@ function parseSharedOpts(rest) {
     emitManifest: false,
     screenshotMode: 'off', // off | all | on-issue
     screenshotFormat: 'webp',
+    // v0.4 security
+    sandbox: false,      // force sandbox ON
+    noSandbox: false,    // force sandbox OFF
+    noEval: false,       // disable flow eval steps
+    allowFile: false,    // permit file:// navigation
+    allowPrivate: false, // permit private-LAN hosts (localhost always allowed)
   };
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
@@ -1507,6 +1720,14 @@ function parseSharedOpts(rest) {
       case '--name': opts.name = next(); break;
       case '--viewport': opts.viewport = next(); break;
       case '--device': opts.device = next(); break;
+      case '--device-matrix': {
+        const v = next();
+        const names = (v === undefined || v.startsWith('--')) ? ['mobile', 'tablet', 'desktop'] : v.split(',').map(s => s.trim());
+        if (v && v.startsWith('--')) i--; // it was the next flag, not a value
+        const valid = names.filter(n => DEVICE_PRESETS[n]);
+        opts.deviceMatrix = valid.length ? valid : ['mobile', 'tablet', 'desktop'];
+        break;
+      }
       case '--wait': opts.wait = next(); break;
       case '--wait-ms': opts.waitMs = parseInt(next(), 10); break;
       case '--full-page': opts.fullPage = true; break;
@@ -1533,6 +1754,12 @@ function parseSharedOpts(rest) {
       case '--screenshots': opts.screenshotMode = 'all'; break;
       case '--screenshot-on-issue': opts.screenshotMode = 'on-issue'; break;
       case '--screenshot-format': opts.screenshotFormat = next(); break;
+      // v0.4 security flags
+      case '--sandbox': opts.sandbox = true; break;
+      case '--no-sandbox': opts.noSandbox = true; break;
+      case '--no-eval': opts.noEval = true; break;
+      case '--allow-file': opts.allowFile = true; break;
+      case '--allow-private': opts.allowPrivate = true; break;
       default: /* tolerate unknowns when called via dispatcher */ break;
     }
   }
@@ -1631,7 +1858,7 @@ function summaryLine(m) {
 }
 
 function printHelp() {
-  console.log(`visual-debug v0.3 — the agent's UI/UX inspector.
+  console.log(`visual-debug v0.4 — the agent's UI/UX inspector.
 
 Ephemeral by default: a run lives in a tmp dir and is deleted on exit.
 Signature output is a layout SVG + uxReport heuristics (vector, not pixels).
@@ -1659,10 +1886,23 @@ Screenshots (off by default):
   --screenshot-on-issue  Raster only when a uxReport finding has severity 'error'
   --screenshot-format <png|webp|jpeg>   Default webp (falls back to jpeg q70)
 
+Devices (device-aware heuristics: tap targets, overflow severity adapt):
+  --device <name>        Playwright device descriptor (e.g. "iPhone 14")
+  --device-matrix [list] Run the same URL across form factors in one shot and
+                         emit a cross-device comparison. Default presets:
+                         mobile,tablet,desktop. e.g. --device-matrix mobile,desktop
+
+Security (Chromium opens untrusted web content):
+  --sandbox              Force Chromium sandbox ON
+  --no-sandbox           Force sandbox OFF (default: ON, auto-off on root/CI/container)
+  --no-eval              Disable flow 'eval' steps
+  --allow-file           Permit file:// navigation (blocked by default)
+  --allow-private        Permit private-LAN hosts (localhost always allowed;
+                         cloud-metadata hosts always blocked)
+
 Shared options:
   --name <basename>      Basename for outputs (default: timestamp)
   --viewport <WxH>       Default 1440x900
-  --device <name>        Playwright device descriptor (e.g. "iPhone 14")
   --wait <selector>      Wait for selector before first snapshot
   --wait-ms <ms>         Extra wait after load (default 500)
   --full-page            Full-page screenshots (when raster enabled)
@@ -1680,6 +1920,7 @@ Shared options:
 
 Examples:
   visual-debug https://example.com
+  visual-debug https://example.com --device-matrix
   visual-debug https://example.com --persist-as home-baseline
   visual-debug --flow flow.json --emit-manifest > baseline.json
   visual-debug --flow flow.json --emit-manifest | visual-debug --diff-against baseline.json -

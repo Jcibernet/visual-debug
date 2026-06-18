@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.4.0] — Hardening + device-aware
+
+Dos ejes: reducir la superficie de ataque (Chromium abre contenido web no
+confiable) y hacer las heurísticas conscientes del dispositivo.
+
+### Added — Devices
+- **`--device-matrix [mobile,tablet,desktop]`**: corre la misma URL en varios
+  form factors en una sola invocación y emite un manifest `type:"device-matrix"`
+  con `deviceSpecificFindings` (heurísticas que disparan en algunos devices y no
+  en otros — la señal de bug responsive) y `summary.worstDevice`.
+- **Heurísticas device-aware**: el umbral de tap target ahora depende del
+  puntero — 44px en touch (WCAG 2.5.5, `severity:error`), 24px en puntero fino
+  (`warn`). El overflow horizontal es `error` en touch y `warn` en desktop. El
+  `uxReport` incluye `device:{label,pointer,minTap}` y el manifest un `profile`.
+- **`hoverOnlyOnTouch`**: nueva heurística que marca interactuables ocultos
+  hasta hover (sin equivalente en touch) cuando el perfil es coarse.
+- Presets `mobile` (390x844, iPhone 13), `tablet` (820x1180, iPad), `desktop`
+  (1440x900). El puntero también se infiere de un `--viewport` angosto (≤600px).
+
+### Added — Security
+- **Sandbox de Chromium ON por default**, con auto-desactivado solo donde no
+  puede arrancar (root / CI / contenedor), avisando por stderr. `--sandbox`
+  fuerza ON, `--no-sandbox` fuerza OFF. Si un launch sandboxeado falla, hay un
+  retry automático sin sandbox (con aviso). Antes `--no-sandbox` estaba
+  hardcodeado siempre.
+- **`--no-eval`**: deshabilita los steps `eval` del modo flow (RCE en el
+  contexto de la página si el flow viene de fuente no confiable).
+- **Guard de navegación**: `file://` bloqueado salvo `--allow-file`; esquemas no
+  http/https rechazados; hosts de **cloud-metadata** (169.254.169.254, etc.)
+  siempre bloqueados; **LAN privada** bloqueada salvo `--allow-private`.
+  `localhost`/loopback siempre permitidos (caso dev server).
+
+### Changed
+- `--device` ahora también ajusta las heurísticas (no solo el viewport).
+
+### Migration
+- Si corrías contra `file://` directo, agregá `--allow-file`. Los ejemplos del
+  README/SKILL ya usaban URLs http; los flujos locales necesitan el flag.
+- En root/CI/Docker el sandbox se desactiva solo (igual que antes), así que no
+  hay cambio operativo ahí. En tu máquina de dev el sandbox ahora va ON.
+
 ## [0.3.1] — Portabilidad y deprecaciones
 
 ### Fixed

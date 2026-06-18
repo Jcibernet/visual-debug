@@ -20,10 +20,11 @@ metadata:
 # visual-debug — el ojo crítico UI/UX del agente
 
 `visual-debug` es un CLI (no un MCP, no consume contexto) que te da ojos sobre una
-app web corriendo. v0.3.0 es **efímero por default** y su salida estrella es un
+app web corriendo. Es **efímero por default** y su salida estrella es un
 **layout SVG** (vector) + un **uxReport** (heurísticas) — texto estructurado, no
 píxeles. Tres modos: **URL** (one-shot), **flow** (multi-step) y **diff**
-(regresión), más el subcomando **runs** (mantenimiento).
+(regresión), más el subcomando **runs** (mantenimiento). Desde v0.4 las
+heurísticas son **device-aware** y Chromium corre **sandboxeado por default**.
 
 Repo: https://github.com/Jcibernet/visual-debug
 Launcher: `~/.factory/bin/visual-debug` (o `visual-debug` si está en el PATH).
@@ -66,6 +67,21 @@ Leé, en este orden:
    etc.), levantalo en background (Execute fireAndForget) y esperá a que responda.
 3. **¿Qué puerto?** Default suele ser 3000 (Next), 5173 (Vite), 8000 (FastAPI).
 
+## Seguridad (defaults v0.4)
+
+Chromium abre contenido web no confiable, así que el tool trae guardas que rara
+vez tenés que tocar — pero conocelas:
+
+- **`file://` está bloqueado.** Si inspeccionás un HTML local, agregá
+  `--allow-file`. URLs http/https de dev server funcionan sin flag.
+- **LAN privada bloqueada**, `localhost`/loopback siempre permitido. Para un host
+  de red interna agregá `--allow-private`. Los hosts de cloud-metadata
+  (169.254.169.254, etc.) están bloqueados siempre, sin override.
+- **Sandbox ON por default**, se auto-desactiva solo en root/CI/contenedor. No lo
+  toques salvo que un launch falle (`--no-sandbox`).
+- **`--no-eval`** deshabilita los steps `eval` de un flow — usalo si el flow no es
+  tuyo.
+
 ## Qué leer y qué IGNORAR (regla central)
 
 - **LEÉ**: el manifest, el layout SVG y el uxReport. Te dan el layout y los
@@ -82,6 +98,24 @@ visual-debug http://localhost:3000/app --emit-manifest | jq '.uxReport.lowContra
 
 Flags: `--viewport 375x812` o `--device "iPhone 14"` (mobile), `--dark`,
 `--wait "[selector]"`, `--auth-storage <storageState.json>` (login).
+
+Las heurísticas se adaptan al dispositivo: en touch (viewport angosto, device
+mobile/tablet) los tap targets <44px y el overflow horizontal son `error`; en
+desktop el umbral baja a 24px y el overflow es `warn`.
+
+### Responsive en una corrida: `--device-matrix`
+
+Para "¿se ve bien en mobile / tablet / desktop?" corré los tres de una:
+
+```bash
+visual-debug http://localhost:3000/app --device-matrix --emit-manifest \
+  | jq '.summary.worstDevice, .deviceSpecificFindings'
+```
+
+Emite `type:"device-matrix"`. Lo clave es `deviceSpecificFindings`: heurísticas
+que disparan en algunos form factors y no en otros — esa es la señal de bug
+responsive (p.ej. overflow solo en mobile). `summary.worstDevice` te dice dónde
+mirar primero. Personalizá con `--device-matrix mobile,desktop`.
 
 ## Modo flow — cuando hay que navegar/interactuar
 
