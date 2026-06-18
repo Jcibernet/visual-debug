@@ -16,7 +16,7 @@
     "smoke": "node visual-debug.js https://example.com --persist-as smoke --viewport 800x600"
   },
   "dependencies": {
-    "playwright": "^1.49.0"
+    "playwright": "^1.61.0"
   },
   "keywords": [
     "playwright",
